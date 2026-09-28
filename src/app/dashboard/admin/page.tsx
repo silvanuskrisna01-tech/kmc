@@ -9,7 +9,7 @@ type Course = { id: string; name: string; teacher_id: string; teacher_name: stri
 const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const timeOptions = Array.from({ length: 13 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00 WITA`);
 
-const MENU = ["Beranda", "Guru", "Kursus", "Murid", "Jadwal"];
+const MENU = ["Beranda", "Guru", "Kursus", "Murid", "Jadwal", "SPP"];
 
 export default function AdminDashboard() {
   const [active, setActive] = useState("Beranda");
@@ -168,6 +168,7 @@ export default function AdminDashboard() {
     Kursus: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" /><path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" /></svg>,
     Murid: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" /></svg>,
     Jadwal: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 8h12v8H4V8z" clipRule="evenodd" /></svg>,
+    SPP: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 2a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>,
   };
 
   if (loading) {
@@ -492,6 +493,11 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* ─── SPP ─── */}
+        {active === "SPP" && (
+          <SppManager />
+        )}
       </main>
     </div>
   );
@@ -638,13 +644,22 @@ function StudentManager() {
                   <td style={{ padding: '12px 16px' }}>{s.phone}</td>
                   <td style={{ padding: '12px 16px' }}>{statusBadge(s.status || "aktif")}</td>
                   <td style={{ padding: '12px 16px' }}><SchedInfo studentId={s.id} /></td>
-                  <td style={{ padding: '12px 16px', display: 'flex', gap: '8px' }}>
+                  <td style={{ padding: '12px 16px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     <button onClick={() => setEditModal({ id: s.id, name: s.name, phone: s.phone, status: s.status || "aktif" })}
-                      style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: '13px' }}>Edit</button>
+                      style={{ background: '#1e3a5f', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#1e4a7f'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#1e3a5f'}
+                    >✏️ Edit</button>
                     <button onClick={() => { setScheduleModal({ studentId: s.id, studentName: s.name }); setSchedForm({ course_id: "", day: "Senin", time: "09:00 WITA" }); }}
-                      style={{ background: 'none', border: 'none', color: '#059669', cursor: 'pointer', fontSize: '13px' }}>+Jadwal</button>
+                      style={{ background: '#065f46', border: 'none', color: '#34d399', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#047857'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#065f46'}
+                    >📅 Jadwal</button>
                     <button onClick={() => deleteStudent(s.id)}
-                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '13px' }}>Hapus</button>
+                      style={{ background: '#3f1f1f', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#5f2f2f'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#3f1f1f'}
+                    >🗑️ Hapus</button>
                   </td>
                 </tr>
               ))
@@ -854,6 +869,137 @@ function ScheduleAdmin() {
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Komponen Manajemen SPP ───
+
+// ─── Komponen Manajemen SPP ───
+function SppManager() {
+  const [students, setStudents] = useState<{ id: string; name: string }[]>([]);
+  const [sppData, setSppData] = useState<Record<string, { amount: number; status: string; paid_at: string | null; id: string | null }>>({});
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [msg, setMsg] = useState("");
+
+  const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+  const monthOptions: string[] = [];
+  const now = new Date();
+  for (let i = -3; i <= 1; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    monthOptions.unshift(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const monthLabel = (m: string) => {
+    const [y, mo] = m.split("-");
+    return `${months[parseInt(mo) - 1]} ${y}`;
+  };
+
+  const fetchData = async () => {
+    setLoading(true); setMsg("");
+    const { data: studs } = await supabase.from("students").select("id, name").eq("status", "aktif").order("name");
+    setStudents(studs || []);
+    const { data: sppRecords } = await supabase.from("spp").select("id, student_id, amount, status, paid_at").eq("month", selectedMonth);
+    const sppMap: Record<string, { amount: number; status: string; paid_at: string | null; id: string | null }> = {};
+    for (const s of (studs || [])) {
+      const rec = (sppRecords || []).find((r: any) => r.student_id === s.id);
+      sppMap[s.id] = rec ? { amount: rec.amount || 0, status: rec.status || "belum", paid_at: rec.paid_at, id: rec.id } : { amount: 0, status: "belum", paid_at: null, id: null };
+    }
+    setSppData(sppMap);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, [selectedMonth]);
+
+  const saveSpp = async (studentId: string, amount: number, status: string) => {
+    setSaving(studentId);
+    const record = sppData[studentId];
+    if (record?.id) {
+      await supabase.from("spp").update({ amount, status, paid_at: status === "lunas" ? new Date().toISOString() : null }).eq("id", record.id);
+    } else {
+      await supabase.from("spp").insert({ student_id: studentId, month: selectedMonth, amount, status, paid_at: status === "lunas" ? new Date().toISOString() : null });
+    }
+    setSaving(null);
+    fetchData();
+  };
+
+  if (loading) return <p style={{ color: '#9ca3af', fontSize: '14px' }}>Memuat...</p>;
+  const totalAmt = Object.values(sppData).reduce((sum, r) => sum + (r.amount || 0), 0);
+  const totalLunas = Object.values(sppData).filter(r => r.status === "lunas").length;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+        <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ padding: '8px 14px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none' }}>
+          {monthOptions.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <span style={{ color: '#9ca3af', fontSize: '13px' }}>Total: <span style={{ color: '#fff', fontWeight: 600 }}>Rp {totalAmt.toLocaleString()}</span></span>
+          <span style={{ color: '#34d399', fontSize: '13px' }}>Lunas: {totalLunas}</span>
+          <span style={{ color: '#f87171', fontSize: '13px' }}>Belum: {students.length - totalLunas}</span>
+        </div>
+      </div>
+
+      {msg && <p style={{ color: msg.startsWith("✓") ? '#34d399' : '#ef4444', fontSize: '14px', margin: '0 0 16px 0' }}>{msg}</p>}
+
+      <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '12px', overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #1f2937', color: '#9ca3af', fontSize: '13px', textAlign: 'left' }}>
+              <th style={{ padding: '12px 16px' }}>No</th>
+              <th style={{ padding: '12px 16px' }}>Nama</th>
+              <th style={{ padding: '12px 16px' }}>Nominal SPP</th>
+              <th style={{ padding: '12px 16px' }}>Status</th>
+              <th style={{ padding: '12px 16px' }}>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Belum ada murid aktif.</td></tr>
+            ) : (
+              students.map((s, i) => {
+                const spp = sppData[s.id] || { amount: 0, status: "belum", paid_at: null, id: null };
+                return (
+                  <tr key={s.id} style={{ borderBottom: i < students.length - 1 ? '1px solid #1f2937' : 'none', color: '#d1d5db', fontSize: '14px' }}>
+                    <td style={{ padding: '12px 16px', color: '#9ca3af' }}>{i + 1}</td>
+                    <td style={{ padding: '12px 16px', fontWeight: 500, color: '#fff' }}>{s.name}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <input type="number" value={spp.amount || ""}
+                        onChange={(e) => { const val = parseInt(e.target.value) || 0; setSppData(prev => ({ ...prev, [s.id]: { ...prev[s.id], amount: val } })); }}
+                        placeholder="0"
+                        style={{ width: '120px', padding: '6px 10px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none' }}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#059669'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = '#374151'}
+                      />
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, backgroundColor: spp.status === "lunas" ? '#065f46' : '#3f2f1f', color: spp.status === "lunas" ? '#34d399' : '#fbbf24' }}>
+                        {spp.status === "lunas" ? "Lunas" : "Belum"}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {spp.status === "lunas" ? (
+                        <button onClick={() => saveSpp(s.id, spp.amount, "belum")} disabled={saving === s.id}
+                          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: saving === s.id ? 'not-allowed' : 'pointer', backgroundColor: '#3f2f1f', color: '#fbbf24' }}
+                        >{saving === s.id ? "..." : "Batalkan"}</button>
+                      ) : (
+                        <button onClick={() => saveSpp(s.id, spp.amount, "lunas")} disabled={saving === s.id || spp.amount <= 0}
+                          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: (saving === s.id || spp.amount <= 0) ? 'not-allowed' : 'pointer', backgroundColor: (saving === s.id || spp.amount <= 0) ? '#374151' : '#065f46', color: (saving === s.id || spp.amount <= 0) ? '#6b7280' : '#34d399' }}
+                        >{saving === s.id ? "..." : "Tandai Lunas"}</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

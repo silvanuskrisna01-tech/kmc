@@ -20,11 +20,13 @@ export default function MasukPage() {
 
     setLoading(true);
 
+    const cleanPhone = noHp.trim().replace(/\D/g, '');
+
     const { data, error: err } = await supabase
       .from("students")
       .select("id, name, phone, status")
       .eq("name", nama.trim())
-      .eq("phone", noHp.trim())
+      .eq("phone", cleanPhone)
       .single();
 
     setLoading(false);

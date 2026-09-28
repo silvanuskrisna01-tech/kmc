@@ -34,6 +34,7 @@ const MENU = [
   "Beranda",
   "Kursus Saya",
   "Jadwal",
+  "SPP",
   "Progres",
   "Pengaturan",
 ];
@@ -50,6 +51,7 @@ export default function StudentDashboard() {
   const [myCourses, setMyCourses] = useState<MyCourse[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionItem[]>([]);
+  const [sppData, setSppData] = useState<{month:string; amount:number; status:string; paid_at:string|null}[]>([]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -159,6 +161,15 @@ export default function StudentDashboard() {
         setSessionHistory(hist.reverse());
       }
 
+      // 3. Ambil SPP
+      const { data: spp } = await supabase
+        .from("spp")
+        .select("month, amount, status, paid_at")
+        .eq("student_id", session.id)
+        .order("month", { ascending: false })
+        .limit(12);
+      setSppData(spp || []);
+
       setLoading(false);
     };
 
@@ -194,6 +205,12 @@ export default function StudentDashboard() {
     Jadwal: (
       <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 8h12v8H4V8z" clipRule="evenodd" />
+      </svg>
+    ),
+    SPP: (
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+        <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
       </svg>
     ),
     Progres: (
@@ -586,6 +603,83 @@ export default function StudentDashboard() {
                 <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada sesi.</p>
               )}
             </div>
+
+            {/* ─── SPP Ringkasan di Beranda ─── */}
+            <div
+              style={{
+                backgroundColor: '#111827',
+                border: '1px solid #1f2937',
+                borderRadius: '12px',
+                padding: '24px',
+                marginTop: '16px',
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#fff',
+                  margin: '0 0 16px 0',
+                }}
+              >
+                Status SPP
+              </h2>
+              {sppData.length === 0 ? (
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada data SPP.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {sppData.slice(0, 3).map((s, i) => {
+                    const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+                    const [y, m] = s.month.split("-");
+                    const label = months[parseInt(m) - 1] + " " + y;
+                    const lunas = s.status === "lunas";
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 14px',
+                          backgroundColor: '#1a1a2e',
+                          borderRadius: '8px',
+                        }}
+                      >
+                        <span style={{ fontSize: '14px', color: '#d1d5db', fontWeight: 500 }}>{label}</span>
+                        <span style={{ fontSize: '14px', color: '#9ca3af' }}>Rp {s.amount.toLocaleString('id-ID')}</span>
+                        <span style={{
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          color: lunas ? '#059669' : '#f59e0b',
+                          backgroundColor: lunas ? 'rgba(5,150,105,0.15)' : 'rgba(245,158,11,0.15)',
+                          padding: '4px 12px',
+                          borderRadius: '6px',
+                        }}>
+                          {lunas ? '✓ Lunas' : 'Belum'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {sppData.length > 3 && (
+                    <button
+                      onClick={() => setActive("SPP")}
+                      style={{
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: '#059669',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        padding: '8px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      Lihat semua →
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -791,6 +885,108 @@ export default function StudentDashboard() {
                 );
               })
             )}
+          </div>
+        )}
+
+        {/* ─── SPP ─── */}
+        {active === "SPP" && (
+          <div
+            style={{
+              maxWidth: '700px',
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: '#111827',
+                border: '1px solid #1f2937',
+                borderRadius: '12px',
+                padding: '24px',
+                marginBottom: '16px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '20px',
+                }}
+              >
+                <h2
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    margin: '0',
+                  }}
+                >
+                  Riwayat Pembayaran SPP
+                </h2>
+              </div>
+              {sppData.length === 0 ? (
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada data SPP.</p>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                  }}
+                >
+                  {sppData.map((s, i) => {
+                    const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+                    const [y, m] = s.month.split("-");
+                    const label = months[parseInt(m) - 1] + " " + y;
+                    const lunas = s.status === "lunas";
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '14px 16px',
+                          backgroundColor: '#1a1a2e',
+                          borderRadius: '10px',
+                          flexWrap: 'wrap',
+                          gap: '8px',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '15px', fontWeight: 600, color: '#fff' }}>{label}</div>
+                          <div style={{ fontSize: '13px', color: '#6b7280' }}>Rp {s.amount.toLocaleString('id-ID')}</div>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                          }}
+                        >
+                          {s.paid_at && (
+                            <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                              {new Date(s.paid_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              color: lunas ? '#059669' : '#f59e0b',
+                              backgroundColor: lunas ? 'rgba(5,150,105,0.15)' : 'rgba(245,158,11,0.15)',
+                              padding: '4px 14px',
+                              borderRadius: '6px',
+                            }}
+                          >
+                            {lunas ? '✓ Lunas' : 'Belum'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

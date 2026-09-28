@@ -34,12 +34,14 @@ export default function DaftarPage() {
     setLoading(true);
     setError("");
 
+    const cleanPhone = form.telepon.trim().replace(/\D/g, '');
+
     // Cek apakah sudah daftar dengan nama & telepon ini
     const { data: existing } = await supabase
       .from("students")
       .select("id")
       .eq("name", form.nama.trim())
-      .eq("phone", form.telepon.trim())
+      .eq("phone", cleanPhone)
       .single();
 
     if (existing) {
@@ -51,7 +53,7 @@ export default function DaftarPage() {
     // Simpan ke Supabase — status default "pending"
     const { error: err } = await supabase.from("students").insert({
       name: form.nama.trim(),
-      phone: form.telepon.trim(),
+      phone: cleanPhone,
       status: "pending",
     });
 
