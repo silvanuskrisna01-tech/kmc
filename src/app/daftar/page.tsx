@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 const INSTRUMEN = [
   "Gitar Akustik",
@@ -17,6 +18,8 @@ const INSTRUMEN = [
 
 export default function DaftarPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [form, setForm] = useState({
     nama: "",
     telepon: "",
@@ -24,14 +27,40 @@ export default function DaftarPage() {
     catatan: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nama || !form.telepon || !form.instrumen) return;
 
-    // Simpan ke localStorage (sementara, nanti ganti ke DB)
-    const existing = JSON.parse(localStorage.getItem("kmc_pendaftar") || "[]");
-    existing.push({ ...form, tanggal: new Date().toISOString(), status: "pending" });
-    localStorage.setItem("kmc_pendaftar", JSON.stringify(existing));
+    setLoading(true);
+    setError("");
+
+    // Cek apakah sudah daftar dengan nama & telepon ini
+    const { data: existing } = await supabase
+      .from("students")
+      .select("id")
+      .eq("name", form.nama.trim())
+      .eq("phone", form.telepon.trim())
+      .single();
+
+    if (existing) {
+      setError("Nama dan nomor telepon sudah terdaftar. Silakan login.");
+      setLoading(false);
+      return;
+    }
+
+    // Simpan ke Supabase — status default "pending"
+    const { error: err } = await supabase.from("students").insert({
+      name: form.nama.trim(),
+      phone: form.telepon.trim(),
+      status: "pending",
+    });
+
+    setLoading(false);
+
+    if (err) {
+      setError("Gagal mendaftar. Coba lagi.");
+      return;
+    }
 
     setSubmitted(true);
   };
@@ -94,7 +123,8 @@ export default function DaftarPage() {
               lineHeight: '1.6',
             }}
           >
-            Pendaftaran berhasil, kami akan segera menghubungi anda. Terima Kasih.
+            Akun kamu sudah terdaftar dan menunggu persetujuan admin.
+            Kamu akan mendapatkan notifikasi setelah akun diaktifkan.
           </p>
           <a
             href="/"
@@ -140,7 +170,6 @@ export default function DaftarPage() {
           width: '100%',
         }}
       >
-        {/* Tombol Kembali */}
         <a
           href="/"
           style={{
@@ -178,7 +207,6 @@ export default function DaftarPage() {
         </p>
 
         <form onSubmit={handleSubmit}>
-          {/* Nama */}
           <div style={{ marginBottom: '20px' }}>
             <label
               style={{
@@ -213,7 +241,6 @@ export default function DaftarPage() {
             />
           </div>
 
-          {/* Telepon */}
           <div style={{ marginBottom: '20px' }}>
             <label
               style={{
@@ -248,7 +275,6 @@ export default function DaftarPage() {
             />
           </div>
 
-          {/* Instrumen */}
           <div style={{ marginBottom: '20px' }}>
             <label
               style={{
@@ -289,7 +315,6 @@ export default function DaftarPage() {
             </select>
           </div>
 
-          {/* Catatan */}
           <div style={{ marginBottom: '28px' }}>
             <label
               style={{
@@ -325,23 +350,32 @@ export default function DaftarPage() {
             />
           </div>
 
+          {error && (
+            <p style={{ color: '#ef4444', fontSize: '14px', margin: '0 0 16px 0', textAlign: 'center' }}>{error}</p>
+          )}
+
           <button
             type="submit"
+            disabled={loading}
             style={{
               width: '100%',
-              backgroundColor: '#059669',
+              backgroundColor: loading ? '#065f46' : '#059669',
               color: '#fff',
               border: 'none',
               borderRadius: '8px',
               padding: '12px 0',
               fontSize: '15px',
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+            onMouseEnter={(e) => {
+              if (!loading) e.currentTarget.style.backgroundColor = '#047857';
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) e.currentTarget.style.backgroundColor = '#059669';
+            }}
           >
-            Daftar Sekarang
+            {loading ? "Mendaftarkan..." : "Daftar Sekarang"}
           </button>
         </form>
       </div>

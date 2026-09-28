@@ -1,38 +1,42 @@
 "use client";
 
 import { useState } from "react";
-
-const teacherAccounts = [
-  { name: "Pak Budi", password: "budi123" },
-  { name: "Bu Siti", password: "siti123" },
-  { name: "Bu Dewi", password: "dewi123" },
-];
+import { supabase } from "@/lib/supabase";
 
 export default function GuruMasukPage() {
-  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!name.trim() || !password.trim()) {
+    if (!phone.trim() || !password.trim()) {
       setError("Harap isi semua field");
       return;
     }
 
-    const found = teacherAccounts.find(
-      (t) => t.name.toLowerCase() === name.trim().toLowerCase() && t.password === password
-    );
+    setLoading(true);
 
-    if (!found) {
-      setError("Nama atau password salah");
+    const { data, error: err } = await supabase
+      .from("teachers")
+      .select("id, name")
+      .eq("phone", phone.trim())
+      .eq("password", password)
+      .single();
+
+    setLoading(false);
+
+    if (err || !data) {
+      setError("Nomor telepon atau password salah");
       return;
     }
 
     const session = {
-      name: found.name,
+      id: data.id,
+      name: data.name,
       role: "teacher",
       loginAt: new Date().toISOString(),
     };
@@ -80,10 +84,19 @@ export default function GuruMasukPage() {
         }}
       >
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <div style={{ fontSize: "18px", fontWeight: 700, color: "#fff", marginBottom: "4px" }}>
+          <div
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#fff",
+              marginBottom: "4px",
+            }}
+          >
             Krisna Music Course
           </div>
-          <div style={{ fontSize: "14px", color: "#059669", fontWeight: 600 }}>
+          <div
+            style={{ fontSize: "14px", color: "#059669", fontWeight: 600 }}
+          >
             Guru — Masuk
           </div>
         </div>
@@ -99,11 +112,13 @@ export default function GuruMasukPage() {
                 marginBottom: "8px",
               }}
             >
-              Nama Lengkap
+              No Telepon
             </label>
-            <select
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="08xxxxxxx"
               style={{
                 width: "100%",
                 padding: "12px 16px",
@@ -117,14 +132,7 @@ export default function GuruMasukPage() {
               }}
               onFocus={(e) => (e.target.style.borderColor = "#059669")}
               onBlur={(e) => (e.target.style.borderColor = "#374151")}
-            >
-              <option value="">Pilih nama guru</option>
-              {teacherAccounts.map((t) => (
-                <option key={t.name} value={t.name}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div style={{ marginBottom: "24px" }}>
@@ -175,40 +183,28 @@ export default function GuruMasukPage() {
 
           <button
             type="submit"
+            disabled={loading}
             style={{
               width: "100%",
               padding: "14px",
-              backgroundColor: "#059669",
+              backgroundColor: loading ? "#065f46" : "#059669",
               color: "#fff",
               border: "none",
               borderRadius: "8px",
               fontSize: "16px",
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = "#047857")
+              !loading && (e.currentTarget.style.backgroundColor = "#047857")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "#059669")
+              !loading && (e.currentTarget.style.backgroundColor = "#059669")
             }
           >
-            Masuk
+            {loading ? "Memproses..." : "Masuk"}
           </button>
         </form>
-
-        <p
-          style={{
-            fontSize: "14px",
-            color: "#6b7280",
-            margin: "24px 0 0 0",
-            textAlign: "center",
-          }}
-        >
-          <span style={{ color: "#9ca3af" }}>
-            Demo: Pak Budi / budi123, Bu Siti / siti123, Bu Dewi / dewi123
-          </span>
-        </p>
       </div>
     </div>
   );

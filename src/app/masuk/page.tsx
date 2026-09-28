@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function MasukPage() {
   const [nama, setNama] = useState("");
   const [noHp, setNoHp] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -16,15 +18,36 @@ export default function MasukPage() {
       return;
     }
 
-    // Simpan sesi login ke localStorage
+    setLoading(true);
+
+    const { data, error: err } = await supabase
+      .from("students")
+      .select("id, name, phone, status")
+      .eq("name", nama.trim())
+      .eq("phone", noHp.trim())
+      .single();
+
+    setLoading(false);
+
+    if (err || !data) {
+      setError("Akun tidak ditemukan. Silakan daftar dulu.");
+      return;
+    }
+
+    if (data.status !== "aktif") {
+      setError("Akun kamu masih menunggu persetujuan admin.");
+      return;
+    }
+
+    // Login berhasil
     const session = {
-      name: nama.trim(),
-      phone: noHp.trim(),
+      id: data.id,
+      name: data.name,
+      phone: data.phone,
+      role: "student",
       loginAt: new Date().toISOString(),
     };
     localStorage.setItem("kmc_student_session", JSON.stringify(session));
-
-    // Redirect ke dashboard student
     window.location.href = "/dashboard/student";
   };
 
@@ -39,7 +62,6 @@ export default function MasukPage() {
         padding: "0 24px",
       }}
     >
-      {/* Tombol Kembali */}
       <a
         href="/auth"
         style={{
@@ -68,27 +90,23 @@ export default function MasukPage() {
           boxSizing: "border-box",
         }}
       >
-        <h1
-          style={{
-            fontSize: "24px",
-            fontWeight: 700,
-            color: "#fff",
-            margin: "0 0 8px 0",
-            textAlign: "center",
-          }}
-        >
-          Masuk Student
-        </h1>
-        <p
-          style={{
-            fontSize: "14px",
-            color: "#6b7280",
-            margin: "0 0 32px 0",
-            textAlign: "center",
-          }}
-        >
-          Masuk ke akun student kamu
-        </p>
+        <div style={{ textAlign: "center", marginBottom: "32px" }}>
+          <div
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#fff",
+              marginBottom: "4px",
+            }}
+          >
+            Krisna Music Course
+          </div>
+          <div
+            style={{ fontSize: "14px", color: "#059669", fontWeight: 600 }}
+          >
+            Murid — Masuk
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: "20px" }}>
@@ -107,7 +125,7 @@ export default function MasukPage() {
               type="text"
               value={nama}
               onChange={(e) => setNama(e.target.value)}
-              placeholder="Masukkan nama kamu"
+              placeholder="Nama kamu"
               style={{
                 width: "100%",
                 padding: "12px 16px",
@@ -134,13 +152,13 @@ export default function MasukPage() {
                 marginBottom: "8px",
               }}
             >
-              No Telepon / WA
+              No. Telepon
             </label>
             <input
-              type="tel"
+              type="text"
               value={noHp}
               onChange={(e) => setNoHp(e.target.value)}
-              placeholder="Masukkan nomor telepon"
+              placeholder="08xxxxxxxx"
               style={{
                 width: "100%",
                 padding: "12px 16px",
@@ -172,25 +190,26 @@ export default function MasukPage() {
 
           <button
             type="submit"
+            disabled={loading}
             style={{
               width: "100%",
               padding: "14px",
-              backgroundColor: "#059669",
+              backgroundColor: loading ? "#065f46" : "#059669",
               color: "#fff",
               border: "none",
               borderRadius: "8px",
               fontSize: "16px",
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = "#047857")
+              !loading && (e.currentTarget.style.backgroundColor = "#047857")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "#059669")
+              !loading && (e.currentTarget.style.backgroundColor = "#059669")
             }
           >
-            Masuk
+            {loading ? "Memproses..." : "Masuk"}
           </button>
         </form>
 
@@ -205,11 +224,9 @@ export default function MasukPage() {
           Belum punya akun?{" "}
           <a
             href="/daftar"
-            style={{
-              color: "#34d399",
-              textDecoration: "none",
-              fontWeight: 500,
-            }}
+            style={{ color: "#059669", textDecoration: "none", fontWeight: 600 }}
+            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
           >
             Daftar di sini
           </a>

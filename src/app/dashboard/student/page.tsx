@@ -1,79 +1,34 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
-// ─── Mock Data ───
-const myCourses = [
-  { course: "Gitar Akustik", teacher: "Pak Budi", day: "Senin", time: "15:00 WITA", status: "Aktif", startDate: "1 Okt 2026" },
-  { course: "Vokal", teacher: "Bu Siti", day: "Rabu", time: "14:00 WITA", status: "Aktif", startDate: "1 Okt 2026" },
-  { course: "Piano", teacher: "Bu Dewi", day: "Jumat", time: "16:00 WITA", status: "Aktif", startDate: "1 Okt 2026" },
-];
+type MyCourse = { course: string; teacher: string; day: string; time: string };
+type ScheduleItem = { id: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" };
+type SessionItem = { id: number; date: string; day: string; time: string; course: string; teacher: string; duration: string; rating: number };
 
-const mySchedule = [
-  // Gitar Akustik — Senin 15:00 WITA — Pak Budi
-  { id: 1, day: "Senin", date: "5 Okt", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", status: "akan datang" },
-  { id: 3, day: "Senin", date: "12 Okt", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", status: "akan datang" },
-  { id: 5, day: "Senin", date: "19 Okt", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", status: "akan datang" },
-  { id: 7, day: "Senin", date: "26 Okt", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", status: "akan datang" },
-  // Vokal — Rabu 14:00 WITA — Bu Siti
-  { id: 2, day: "Rabu", date: "7 Okt", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", status: "akan datang" },
-  { id: 4, day: "Rabu", date: "14 Okt", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", status: "akan datang" },
-  { id: 6, day: "Rabu", date: "21 Okt", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", status: "akan datang" },
-  { id: 8, day: "Rabu", date: "28 Okt", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", status: "akan datang" },
-  // Piano — Jumat 16:00 WITA — Bu Dewi
-  { id: 9, day: "Jumat", date: "9 Okt", time: "16:00 WITA", course: "Piano", teacher: "Bu Dewi", status: "akan datang" },
-  { id: 10, day: "Jumat", date: "16 Okt", time: "16:00 WITA", course: "Piano", teacher: "Bu Dewi", status: "akan datang" },
-  { id: 11, day: "Jumat", date: "23 Okt", time: "16:00 WITA", course: "Piano", teacher: "Bu Dewi", status: "akan datang" },
-  { id: 12, day: "Jumat", date: "30 Okt", time: "16:00 WITA", course: "Piano", teacher: "Bu Dewi", status: "akan datang" },
-];
-
-const sessionHistory = [
-  { id: 101, date: "7 Sep", day: "Senin", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", duration: "60m", rating: 5 },
-  { id: 102, date: "9 Sep", day: "Rabu", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", duration: "60m", rating: 4 },
-  { id: 103, date: "14 Sep", day: "Senin", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", duration: "60m", rating: 5 },
-  { id: 104, date: "16 Sep", day: "Rabu", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", duration: "60m", rating: 4 },
-  { id: 105, date: "21 Sep", day: "Senin", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", duration: "60m", rating: 5 },
-  { id: 106, date: "23 Sep", day: "Rabu", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", duration: "45m", rating: 3 },
-  { id: 107, date: "28 Sep", day: "Senin", time: "15:00 WITA", course: "Gitar Akustik", teacher: "Pak Budi", duration: "60m", rating: 4 },
-  { id: 108, date: "30 Sep", day: "Rabu", time: "14:00 WITA", course: "Vokal", teacher: "Bu Siti", duration: "60m", rating: 5 },
-  { id: 109, date: "25 Sep", day: "Jumat", time: "16:00 WITA", course: "Piano", teacher: "Bu Dewi", duration: "45m", rating: 5 },
-];
-
-// ─── LOGIC SIAP SUPABASE ───
-// Jika status sesi masih hardcoded, ganti jadi otomatis dari tanggal:
-// tanggal < hari ini → "selesai", selain itu → "akan datang".
-// Pas Supabase nyambung, tinggal ganti 2 baris demo di bawah ini:
-//   const today = new Date();
-//   const currentMonthLabel = monthMap[new Date().getMonth()];
 const monthMap = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-const today = new Date(2026, 8, 28); // demo anchor: 28 September 2026
-const currentMonthLabel = "Okt";     // demo: preview bulan Oktober
 
 function getSessionStatus(dateStr: string): "selesai" | "akan datang" {
-  const [day, month] = dateStr.split(" ");
-  const sessionDate = new Date(today.getFullYear(), monthMap.indexOf(month), parseInt(day));
+  const parts = dateStr.split(" ");
+  if (parts.length < 2) return "akan datang";
+  const [day, month] = parts;
+  const monthIndex = monthMap.indexOf(month);
+  if (monthIndex < 0) return "akan datang";
+  const today = new Date();
+  const sessionDate = new Date(today.getFullYear(), monthIndex, parseInt(day));
   sessionDate.setHours(0, 0, 0, 0);
   const t = new Date(today);
   t.setHours(0, 0, 0, 0);
   return sessionDate < t ? "selesai" : "akan datang";
 }
 
-// Jadwal bulan ini: filter bulan + status otomatis + urut dari tanggal terdekat
-const scheduleThisMonth = mySchedule
-  .filter(s => s.date.includes(currentMonthLabel))
-  .map(s => ({ ...s, status: getSessionStatus(s.date) }))
-  .sort((a, b) => parseInt(a.date) - parseInt(b.date));
-
-// Dashboard: 1 jadwal terdekat per instrumen (hanya yang belum selesai)
-const nearestPerCourse = scheduleThisMonth.reduce((acc: Record<string, (typeof mySchedule)[0]>, s) => {
-  if (s.status !== "selesai" && !acc[s.course]) acc[s.course] = s;
-  return acc;
-}, {});
-const nearestSchedule = Object.values(nearestPerCourse);
-
-const totalSessions = sessionHistory.length;
-const totalHadir = sessionHistory.length; // semua hadir
-const kehadiranPct = "100%";
+function parseDateId(dateStr: string): number {
+  const parts = dateStr.split(" ");
+  if (parts.length < 2) return 99;
+  const monthIndex = monthMap.indexOf(parts[1]);
+  return monthIndex >= 0 ? parseInt(parts[0]) + monthIndex * 100 : 99;
+}
 
 const MENU = [
   "Beranda",
@@ -88,6 +43,13 @@ export default function StudentDashboard() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [studentName, setStudentName] = useState("Murid");
+  const [studentId, setStudentId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Data dari Supabase
+  const [myCourses, setMyCourses] = useState<MyCourse[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<SessionItem[]>([]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -96,16 +58,127 @@ export default function StudentDashboard() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // Baca session + fetch data
   useEffect(() => {
-    // Ambil nama student dari session login
-    const session = localStorage.getItem("kmc_student_session");
-    if (session) {
-      try {
-        const data = JSON.parse(session);
-        if (data.name) setStudentName(data.name);
-      } catch {}
+    const raw = localStorage.getItem("kmc_student_session");
+    if (!raw) { window.location.href = "/auth"; return; }
+
+    let session: { id: string; name: string; phone: string };
+    try {
+      session = JSON.parse(raw);
+      if (!session.id) throw new Error();
+    } catch {
+      window.location.href = "/auth";
+      return;
     }
+
+    setStudentName(session.name);
+    setStudentId(session.id);
+
+    const fetchData = async () => {
+      setLoading(true);
+
+      // 1. Ambil jadwal murid ini
+      const { data: schedules } = await supabase
+        .from("schedules")
+        .select("id, day, time, date, courses!inner(id, name, teachers!inner(name))")
+        .eq("student_id", session.id);
+
+      const schedList: ScheduleItem[] = [];
+      const courseSet = new Set<string>();
+      const courses: MyCourse[] = [];
+
+      for (const s of (schedules as any[] || [])) {
+        const courseName = s.courses?.name || "";
+        const teacherName = s.courses?.teachers?.name || "";
+
+        // Kumpulkan kursus unik
+        if (!courseSet.has(courseName)) {
+          courseSet.add(courseName);
+          courses.push({
+            course: courseName,
+            teacher: teacherName,
+            day: s.day,
+            time: s.time,
+          });
+        }
+
+        // Buat jadwal per sesi (jika ada date, bikin satu baris; kalo ga ada, generate dummy)
+        if (s.date) {
+          schedList.push({
+            id: s.id,
+            day: s.day,
+            date: s.date,
+            time: s.time,
+            course: courseName,
+            teacher: teacherName,
+            status: getSessionStatus(s.date),
+          });
+        } else {
+          // Jadwal mingguan — generate hanya untuk bulan ini
+          const currentMonth = new Date().getMonth();
+          for (let w = 0; w < 4; w++) {
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + (w * 7));
+            if (futureDate.getMonth() !== currentMonth) break;
+            const dayStr = `${futureDate.getDate()} ${monthMap[futureDate.getMonth()]}`;
+            schedList.push({
+              id: s.id * 100 + w,
+              day: s.day,
+              date: dayStr,
+              time: s.time,
+              course: courseName,
+              teacher: teacherName,
+              status: getSessionStatus(dayStr),
+            });
+          }
+        }
+      }
+
+      setMyCourses(courses);
+      setScheduleItems(schedList);
+
+      // 2. Ambil sesi history
+      const scheduleIds = (schedules as any[] || []).map((s: any) => s.id);
+      if (scheduleIds.length > 0) {
+        const { data: sessions } = await supabase
+          .from("sessions")
+          .select("id, status, date, schedules!inner(id, day, time, courses!inner(name, teachers!inner(name)))")
+          .in("schedule_id", scheduleIds);
+
+        const hist: SessionItem[] = (sessions as any[] || []).map((s: any) => ({
+          id: s.id,
+          date: s.date,
+          day: s.schedules?.day || "",
+          time: s.schedules?.time || "",
+          course: s.schedules?.courses?.name || "",
+          teacher: s.schedules?.courses?.teachers?.name || "",
+          duration: "60m",
+          rating: s.status === "hadir" || s.status === "selesai" ? 5 : 3,
+        }));
+        setSessionHistory(hist.reverse());
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
   }, []);
+
+  // Turunan data
+  const currentMonthLabel = monthMap[new Date().getMonth()];
+  const scheduleThisMonth = scheduleItems
+    .filter(s => s.date.includes(currentMonthLabel))
+    .sort((a, b) => parseDateId(a.date) - parseDateId(b.date));
+
+  const nearestPerCourse = scheduleThisMonth.reduce((acc: Record<string, ScheduleItem>, s) => {
+    if (s.status !== "selesai" && !acc[s.course]) acc[s.course] = s;
+    return acc;
+  }, {});
+  const nearestSchedule = Object.values(nearestPerCourse);
+
+  const totalSessions = sessionHistory.length;
+  const totalHadir = sessionHistory.length;
 
   const MENU_ICONS: Record<string, React.ReactNode> = {
     Beranda: (
@@ -139,6 +212,14 @@ export default function StudentDashboard() {
     return "★".repeat(n) + "☆".repeat(5 - n);
   };
 
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#030712", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "#9ca3af", fontSize: "16px" }}>Memuat data...</p>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -161,7 +242,6 @@ export default function StudentDashboard() {
           overflow: 'hidden',
         }}
       >
-        {/* Toggle button */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           style={{
@@ -187,7 +267,6 @@ export default function StudentDashboard() {
           </svg>
         </button>
 
-        {/* Logo */}
         <div
           style={{
             padding: isCollapsed ? '0' : '0 20px',
@@ -209,7 +288,6 @@ export default function StudentDashboard() {
           )}
         </div>
 
-        {/* Menu Items */}
         <nav
           style={{
             display: 'flex',
@@ -256,7 +334,6 @@ export default function StudentDashboard() {
           })}
         </nav>
 
-        {/* Logout */}
         <div
           style={{
             marginTop: 'auto',
@@ -320,7 +397,6 @@ export default function StudentDashboard() {
         {/* ─── BERANDA ─── */}
         {active === "Beranda" && (
           <>
-            {/* Welcome */}
             <div
               style={{
                 background: 'linear-gradient(135deg, #065f46 0%, #111827 100%)',
@@ -342,7 +418,6 @@ export default function StudentDashboard() {
               </h2>
             </div>
 
-            {/* Stat Cards */}
             <div
               style={{
                 display: 'grid',
@@ -355,7 +430,7 @@ export default function StudentDashboard() {
                 { label: "Kursus Aktif", value: myCourses.length },
                 { label: "Total Sesi", value: totalSessions },
                 { label: "Hadir", value: totalHadir },
-                { label: "Kehadiran", value: kehadiranPct },
+                { label: "Kehadiran", value: totalSessions > 0 ? "100%" : "0%" },
               ].map((s) => (
                 <div
                   key={s.label}
@@ -389,7 +464,6 @@ export default function StudentDashboard() {
               ))}
             </div>
 
-            {/* Jadwal Berikutnya — Full width */}
             <div
               style={{
                 backgroundColor: '#111827',
@@ -409,57 +483,58 @@ export default function StudentDashboard() {
               >
                 Jadwal Berikutnya
               </h2>
-              {nearestSchedule.map((s, i) => (
-                <div
-                  key={s.id}
-                  style={{
-                    display: 'flex',
-                    gap: '16px',
-                    padding: '0 0 16px 0',
-                    marginBottom: i < Math.min(nearestSchedule.length, 3) - 1 ? '16px' : '0',
-                    borderBottom: i < Math.min(nearestSchedule.length, 3) - 1 ? '1px solid #1f2937' : 'none',
-                  }}
-                >
-                  {/* Timeline dot */}
+              {nearestSchedule.length === 0 ? (
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada jadwal.</p>
+              ) : (
+                nearestSchedule.map((s, i) => (
                   <div
+                    key={s.id}
                     style={{
                       display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      flexShrink: 0,
+                      gap: '16px',
+                      padding: '0 0 16px 0',
+                      marginBottom: i < Math.min(nearestSchedule.length, 3) - 1 ? '16px' : '0',
+                      borderBottom: i < Math.min(nearestSchedule.length, 3) - 1 ? '1px solid #1f2937' : 'none',
                     }}
                   >
                     <div
                       style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        backgroundColor: '#059669',
-                        marginTop: '4px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        flexShrink: 0,
                       }}
-                    />
-                    {i < Math.min(nearestSchedule.length, 3) - 1 && (
+                    >
                       <div
                         style={{
-                          width: '2px',
-                          flex: 1,
-                          backgroundColor: '#1f2937',
-                          margin: '4px 0',
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: '#059669',
+                          marginTop: '4px',
                         }}
                       />
-                    )}
-                  </div>
-                  {/* Content */}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: '#d1d5db', fontSize: '14px', lineHeight: '1.6' }}>
-                      Hari <span style={{ color: '#fff', fontWeight: 600 }}>{s.day}</span> Tanggal <span style={{ color: '#fff', fontWeight: 600 }}>{s.date}</span> jam <span style={{ color: '#059669', fontWeight: 600 }}>{s.time}</span> — <span style={{ color: '#fff' }}>{s.course}</span> — <span style={{ color: '#9ca3af' }}>{s.teacher}</span>
+                      {i < Math.min(nearestSchedule.length, 3) - 1 && (
+                        <div
+                          style={{
+                            width: '2px',
+                            flex: 1,
+                            backgroundColor: '#1f2937',
+                            margin: '4px 0',
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: '#d1d5db', fontSize: '14px', lineHeight: '1.6' }}>
+                        Hari <span style={{ color: '#fff', fontWeight: 600 }}>{s.day}</span> Tanggal <span style={{ color: '#fff', fontWeight: 600 }}>{s.date}</span> jam <span style={{ color: '#059669', fontWeight: 600 }}>{s.time}</span> — <span style={{ color: '#fff' }}>{s.course}</span> — <span style={{ color: '#9ca3af' }}>{s.teacher}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
 
-            {/* Aktivitas Terbaru */}
             <div
               style={{
                 backgroundColor: '#111827',
@@ -468,49 +543,49 @@ export default function StudentDashboard() {
                 padding: '24px',
               }}
             >
-                <h2
+              <h2
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#fff',
+                  margin: '0 0 16px 0',
+                }}
+              >
+                Aktivitas Terbaru
+              </h2>
+              {sessionHistory.slice(0, 4).map((s, i) => (
+                <div
+                  key={s.id}
                   style={{
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    color: '#fff',
-                    margin: '0 0 16px 0',
+                    display: 'flex',
+                    gap: '12px',
+                    padding: '0 0 12px 0',
+                    marginBottom: i < Math.min(sessionHistory.length, 4) - 1 ? '12px' : '0',
+                    borderBottom: i < Math.min(sessionHistory.length, 4) - 1 ? '1px solid #1f2937' : 'none',
                   }}
                 >
-                  Aktivitas Terbaru
-                </h2>
-                {sessionHistory.slice(0, 4).map((s, i) => (
                   <div
-                    key={s.id}
                     style={{
-                      display: 'flex',
-                      gap: '12px',
-                      padding: '0 0 12px 0',
-                      marginBottom: i < Math.min(sessionHistory.length, 4) - 1 ? '12px' : '0',
-                      borderBottom: i < Math.min(sessionHistory.length, 4) - 1 ? '1px solid #1f2937' : 'none',
+                      textAlign: 'center',
+                      flexShrink: 0,
+                      width: '40px',
                     }}
                   >
-                    {/* Date */}
-                    <div
-                      style={{
-                        textAlign: 'center',
-                        flexShrink: 0,
-                        width: '40px',
-                      }}
-                    >
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#9ca3af' }}>{s.date}</div>
-                    </div>
-                    {/* Info */}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff' }}>{s.course}</div>
-                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{s.teacher} • {s.time} • {s.duration}</div>
-                    </div>
-                    {/* Stars */}
-                    <div style={{ fontSize: '12px', color: '#f59e0b', flexShrink: 0 }}>
-                      {renderStars(s.rating)}
-                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#9ca3af' }}>{s.date}</div>
                   </div>
-                ))}
-              </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff' }}>{s.course}</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>{s.teacher} • {s.time} • {s.duration}</div>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#f59e0b', flexShrink: 0 }}>
+                    {renderStars(s.rating)}
+                  </div>
+                </div>
+              ))}
+              {sessionHistory.length === 0 && (
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada sesi.</p>
+              )}
+            </div>
           </>
         )}
 
@@ -523,63 +598,65 @@ export default function StudentDashboard() {
               gap: '16px',
             }}
           >
-            {myCourses.map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  backgroundColor: '#111827',
-                  border: '1px solid #1f2937',
-                  borderRadius: '12px',
-                  padding: '24px',
-                }}
-              >
+            {myCourses.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada kursus.</p>
+            ) : (
+              myCourses.map((c, i) => (
                 <div
+                  key={i}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    marginBottom: '16px',
+                    backgroundColor: '#111827',
+                    border: '1px solid #1f2937',
+                    borderRadius: '12px',
+                    padding: '24px',
                   }}
                 >
                   <div
                     style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '12px',
-                      backgroundColor: '#1e3a2f',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '24px',
+                      gap: '12px',
+                      marginBottom: '16px',
                     }}
                   >
-                    {c.course === "Gitar Akustik" ? "🎸" : c.course === "Vokal" ? "🎤" : "🎹"}
-                  </div>
-                  <div>
-                                        <div style={{ fontSize: '16px', fontWeight: 600, color: '#fff' }}>{c.course}</div>
-                                      </div>
-                </div>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '12px',
-                  }}
-                >
-                  {[
-                    { label: "Guru", value: c.teacher },
-                    { label: "Jadwal", value: `${c.day}, ${c.time}` },
-                    { label: "Mulai", value: c.startDate },
-                    { label: "Status", value: c.status },
-                  ].map((d) => (
-                    <div key={d.label}>
-                      <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '2px' }}>{d.label}</div>
-                      <div style={{ fontSize: '14px', color: '#fff', fontWeight: 500 }}>{d.value}</div>
+                    <div
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '12px',
+                        backgroundColor: '#1e3a2f',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '24px',
+                      }}
+                    >
+                      {c.course === "Gitar Akustik" || c.course === "Gitar Elektrik" || c.course === "Gitar Klasik" ? "🎸" : c.course === "Vokal" ? "🎤" : "🎹"}
                     </div>
-                  ))}
+                    <div>
+                      <div style={{ fontSize: '16px', fontWeight: 600, color: '#fff' }}>{c.course}</div>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '12px',
+                    }}
+                  >
+                    {[
+                      { label: "Guru", value: c.teacher },
+                      { label: "Jadwal", value: `${c.day}, ${c.time}` },
+                    ].map((d) => (
+                      <div key={d.label}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '2px' }}>{d.label}</div>
+                        <div style={{ fontSize: '14px', color: '#fff', fontWeight: 500 }}>{d.value}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
@@ -592,135 +669,134 @@ export default function StudentDashboard() {
               gap: '16px',
             }}
           >
-            {myCourses.map((c, ci) => {
-              const items = scheduleThisMonth.filter((s) => s.course === c.course);
-              if (items.length === 0) return null;
-              return (
-                <div
-                  key={ci}
-                  style={{
-                    backgroundColor: '#111827',
-                    border: '1px solid #1f2937',
-                    borderRadius: '12px',
-                    padding: '24px',
-                  }}
-                >
-                  {/* Header card */}
+            {myCourses.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada jadwal.</p>
+            ) : (
+              myCourses.map((c, ci) => {
+                const items = scheduleThisMonth.filter((s) => s.course === c.course);
+                if (items.length === 0) return null;
+                return (
                   <div
+                    key={ci}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      marginBottom: '20px',
+                      backgroundColor: '#111827',
+                      border: '1px solid #1f2937',
+                      borderRadius: '12px',
+                      padding: '24px',
                     }}
                   >
                     <div
                       style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '12px',
-                        backgroundColor: '#1e3a2f',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '22px',
-                        flexShrink: 0,
+                        gap: '12px',
+                        marginBottom: '20px',
                       }}
                     >
-                      {c.course === "Gitar Akustik" ? "🎸" : c.course === "Vokal" ? "🎤" : "🎹"}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '16px', fontWeight: 600, color: '#fff' }}>{c.course}</div>
-                      <div style={{ fontSize: '13px', color: '#059669', fontWeight: 500 }}>{c.teacher}</div>
-                    </div>
-                  </div>
-                  {/* Timeline sesi */}
-                  {items.map((s, i) => {
-                    const isDone = s.status === "selesai";
-                    return (
                       <div
-                        key={s.id}
                         style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          backgroundColor: '#1e3a2f',
                           display: 'flex',
-                          gap: '16px',
-                          padding: '0 0 16px 0',
-                          marginBottom: i < items.length - 1 ? '16px' : '0',
-                          borderBottom: i < items.length - 1 ? '1px solid #1f2937' : 'none',
-                          opacity: isDone ? 0.5 : 1,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '22px',
+                          flexShrink: 0,
                         }}
                       >
-                        {/* Timeline dot */}
+                        {c.course === "Gitar Akustik" || c.course === "Gitar Elektrik" || c.course === "Gitar Klasik" ? "🎸" : c.course === "Vokal" ? "🎤" : "🎹"}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '16px', fontWeight: 600, color: '#fff' }}>{c.course}</div>
+                        <div style={{ fontSize: '13px', color: '#059669', fontWeight: 500 }}>{c.teacher}</div>
+                      </div>
+                    </div>
+                    {items.map((s, i) => {
+                      const isDone = s.status === "selesai";
+                      return (
                         <div
+                          key={s.id}
                           style={{
                             display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            flexShrink: 0,
+                            gap: '16px',
+                            padding: '0 0 16px 0',
+                            marginBottom: i < items.length - 1 ? '16px' : '0',
+                            borderBottom: i < items.length - 1 ? '1px solid #1f2937' : 'none',
+                            opacity: isDone ? 0.5 : 1,
                           }}
                         >
                           <div
                             style={{
-                              width: '12px',
-                              height: '12px',
-                              borderRadius: '50%',
-                              backgroundColor: isDone ? '#4b5563' : '#059669',
-                              marginTop: '4px',
-                            }}
-                          />
-                          {i < items.length - 1 && (
-                            <div
-                              style={{
-                                width: '2px',
-                                flex: 1,
-                                backgroundColor: '#1f2937',
-                                margin: '4px 0',
-                              }}
-                            />
-                          )}
-                        </div>
-                        {/* Content */}
-                        <div style={{ flex: 1 }}>
-                          <div
-                            style={{
                               display: 'flex',
-                              justifyContent: 'space-between',
+                              flexDirection: 'column',
                               alignItems: 'center',
-                              flexWrap: 'wrap',
-                              gap: '8px',
+                              flexShrink: 0,
                             }}
                           >
-                            <div>
-                              <div style={{ fontSize: '15px', fontWeight: 600, color: isDone ? '#6b7280' : '#fff', textDecoration: isDone ? 'line-through' : 'none' }}>
-                                {s.day}, {s.date}
-                              </div>
-                              <div style={{ fontSize: '13px', color: isDone ? '#4b5563' : '#9ca3af', marginTop: '2px' }}>
-                                {s.time}
-                              </div>
-                            </div>
                             <div
                               style={{
-                                fontSize: '12px',
-                                color: isDone ? '#4b5563' : '#6b7280',
-                                textDecoration: isDone ? 'line-through' : 'none',
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '50%',
+                                backgroundColor: isDone ? '#4b5563' : '#059669',
+                                marginTop: '4px',
+                              }}
+                            />
+                            {i < items.length - 1 && (
+                              <div
+                                style={{
+                                  width: '2px',
+                                  flex: 1,
+                                  backgroundColor: '#1f2937',
+                                  margin: '4px 0',
+                                }}
+                              />
+                            )}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '8px',
                               }}
                             >
-                              {s.status === "selesai" ? "✓ Selesai" : "Akan datang"}
+                              <div>
+                                <div style={{ fontSize: '15px', fontWeight: 600, color: isDone ? '#6b7280' : '#fff', textDecoration: isDone ? 'line-through' : 'none' }}>
+                                  {s.day}, {s.date}
+                                </div>
+                                <div style={{ fontSize: '13px', color: isDone ? '#4b5563' : '#9ca3af', marginTop: '2px' }}>
+                                  {s.time}
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '12px',
+                                  color: isDone ? '#4b5563' : '#6b7280',
+                                  textDecoration: isDone ? 'line-through' : 'none',
+                                }}
+                              >
+                                {s.status === "selesai" ? "✓ Selesai" : "Akan datang"}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
 
         {/* ─── PROGRES ─── */}
         {active === "Progres" && (
           <>
-            {/* Stat per kursus */}
             <div
               style={{
                 display: 'grid',
@@ -770,7 +846,6 @@ export default function StudentDashboard() {
                     >
                       Sesi selesai
                     </div>
-                    {/* Progress bar */}
                     <div
                       style={{
                         marginTop: '12px',
@@ -795,7 +870,6 @@ export default function StudentDashboard() {
               })}
             </div>
 
-            {/* History Sesi */}
             <div
               style={{
                 backgroundColor: '#111827',
@@ -814,46 +888,50 @@ export default function StudentDashboard() {
               >
                 History Sesi
               </h2>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                }}
-              >
-                {sessionHistory.slice(0, 5).map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '12px',
-                      backgroundColor: '#1a1a2e',
-                      borderRadius: '8px',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff' }}>{s.course}</div>
-                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                        {s.date} • {s.day} • {s.time} • {s.duration}
-                      </div>
-                    </div>
+              {sessionHistory.length === 0 ? (
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada sesi.</p>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  {sessionHistory.slice(0, 5).map((s) => (
                     <div
+                      key={s.id}
                       style={{
                         display: 'flex',
+                        justifyContent: 'space-between',
                         alignItems: 'center',
+                        padding: '12px',
+                        backgroundColor: '#1a1a2e',
+                        borderRadius: '8px',
+                        flexWrap: 'wrap',
                         gap: '8px',
                       }}
                     >
-                      <span style={{ fontSize: '13px', color: '#6b7280' }}>{s.teacher}</span>
-                      <span style={{ fontSize: '13px', color: '#f59e0b' }}>{renderStars(s.rating)}</span>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff' }}>{s.course}</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          {s.date} • {s.day} • {s.time} • {s.duration}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <span style={{ fontSize: '13px', color: '#6b7280' }}>{s.teacher}</span>
+                        <span style={{ fontSize: '13px', color: '#f59e0b' }}>{renderStars(s.rating)}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -944,7 +1022,7 @@ export default function StudentDashboard() {
                 />
               </div>
               <button
-                onClick={() => alert("Pengaturan akan tersimpan setelah database terhubung.")}
+                onClick={() => alert("Fitur simpan akan aktif setelah integrasi penuh.")}
                 style={{
                   width: '100%',
                   padding: '12px',

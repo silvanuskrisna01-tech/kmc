@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 const MENU = [
   "Beranda",
@@ -8,69 +9,27 @@ const MENU = [
   "Laporan",
 ];
 
-// Map guru → kursus yang diajar
-const teacherCourses: Record<string, string[]> = {
-  "Pak Budi": ["Gitar Akustik", "Gitar Listrik", "Gitar Klasik"],
-  "Bu Siti": ["Vokal"],
-  "Bu Dewi": ["Piano"],
-};
-
-// ─── Mock Data ───
-const scheduleToday = [
-  { id: 1, day: "Senin", time: "09:00 WITA", student: "Andi", course: "Gitar Akustik" },
-  { id: 2, day: "Senin", time: "11:00 WITA", student: "Siti", course: "Gitar Listrik" },
-  { id: 3, day: "Senin", time: "14:00 WITA", student: "Budi", course: "Gitar Klasik" },
-];
-
-const students = [
-  { name: "Andi", course: "Gitar Akustik", startDate: "1 Mar 2026", status: "Aktif", day: "Senin", time: "09:00 WITA" },
-  { name: "Siti", course: "Gitar Listrik", startDate: "15 Jan 2026", status: "Aktif", day: "Selasa", time: "11:00 WITA" },
-  { name: "Budi", course: "Gitar Klasik", startDate: "10 Okt 2025", status: "Aktif", day: "Rabu", time: "14:00 WITA" },
-  { name: "Dian", course: "Gitar Akustik", startDate: "20 Feb 2026", status: "Aktif", day: "Kamis", time: "10:00 WITA" },
-  { name: "Rizky", course: "Gitar Listrik", startDate: "5 Mar 2026", status: "Aktif", day: "Jumat", time: "13:00 WITA" },
-  { name: "Maya", course: "Gitar Akustik", startDate: "12 Des 2025", status: "Aktif", day: "Sabtu", time: "15:00 WITA" },
-  { name: "Fajar", course: "Gitar Klasik", startDate: "1 Apr 2026", status: "Baru", day: "Senin", time: "08:00 WITA" },
-  { name: "Rina", course: "Gitar Akustik", startDate: "28 Mar 2026", status: "Baru", day: "Rabu", time: "16:00 WITA" },
-];
-
-const attendanceStats = [
-  { label: "Total Sesi", value: "48" },
-  { label: "Hadir", value: "43" },
-  { label: "Alpha", value: "5" },
-  { label: "Kehadiran", value: "89.6%" },
-];
-
-const attendanceData = [
-  { name: "Andi", course: "Gitar Akustik", total: 12, hadir: 12, alpha: 0, pct: "100%" },
-  { name: "Siti", course: "Gitar Listrik", total: 12, hadir: 10, alpha: 2, pct: "83%" },
-  { name: "Budi", course: "Gitar Klasik", total: 12, hadir: 11, alpha: 1, pct: "92%" },
-  { name: "Dian", course: "Gitar Akustik", total: 12, hadir: 10, alpha: 2, pct: "83%" },
-  { name: "Rizky", course: "Gitar Listrik", total: 10, hadir: 8, alpha: 2, pct: "80%" },
-  { name: "Maya", course: "Gitar Akustik", total: 12, hadir: 12, alpha: 0, pct: "100%" },
-  { name: "Fajar", course: "Gitar Klasik", total: 6, hadir: 5, alpha: 1, pct: "83%" },
-  { name: "Rina", course: "Gitar Akustik", total: 8, hadir: 7, alpha: 1, pct: "87.5%" },
-];
-
-const pastSessions = [
-  { id: 101, date: "27 Sep", day: "Sabtu", student: "Maya", time: "15:00 WITA", duration: "60m" },
-  { id: 102, date: "27 Sep", day: "Sabtu", student: "Rizky", time: "13:00 WITA", duration: "60m" },
-  { id: 103, date: "26 Sep", day: "Jumat", student: "Fajar", time: "08:00 WITA", duration: "45m" },
-  { id: 104, date: "26 Sep", day: "Jumat", student: "Dian", time: "10:00 WITA", duration: "60m" },
-  { id: 105, date: "25 Sep", day: "Kamis", student: "Siti", time: "11:00 WITA", duration: "60m" },
-  { id: 106, date: "25 Sep", day: "Kamis", student: "Budi", time: "14:00 WITA", duration: "90m" },
-  { id: 107, date: "24 Sep", day: "Rabu", student: "Rina", time: "16:00 WITA", duration: "60m" },
-  { id: 108, date: "24 Sep", day: "Rabu", student: "Andi", time: "09:00 WITA", duration: "60m" },
-];
+type AttendanceStat = { student: string; course: string; total: number; hadir: number; alpha: number; pct: string };
+type ScheduleItem = { id: number; day: string; time: string; student: string; course: string };
+type StudentItem = { name: string; course: string; day: string; time: string };
 
 export default function TeacherDashboard() {
   const [active, setActive] = useState("Beranda");
   const [teacherName, setTeacherName] = useState("");
+  const [teacherId, setTeacherId] = useState<string | null>(null);
   const [filterDay, setFilterDay] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<Record<number, string>>({});
   const [sessionStart, setSessionStart] = useState<Record<number, number>>({});
   const [timerDisplay, setTimerDisplay] = useState<Record<number, string>>({});
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Data dari Supabase
+  const [myCourses, setMyCourses] = useState<string[]>([]);
+  const [mySchedule, setMySchedule] = useState<ScheduleItem[]>([]);
+  const [myStudents, setMyStudents] = useState<StudentItem[]>([]);
+  const [myAttendance, setMyAttendance] = useState<AttendanceStat[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -79,33 +38,123 @@ export default function TeacherDashboard() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Baca session guru
+  // Baca session + fetch data dari Supabase
   useEffect(() => {
-    const session = localStorage.getItem("kmc_teacher_session");
-    if (!session) { window.location.href = "/guru/masuk"; return; }
+    const raw = localStorage.getItem("kmc_teacher_session");
+    if (!raw) { window.location.href = "/guru/masuk"; return; }
+
+    let session: { id: string; name: string };
     try {
-      const data = JSON.parse(session);
-      if (data.name && teacherCourses[data.name]) setTeacherName(data.name);
-      else window.location.href = "/guru/masuk";
-    } catch { window.location.href = "/guru/masuk"; }
+      session = JSON.parse(raw);
+      if (!session.id || !session.name) throw new Error();
+    } catch {
+      window.location.href = "/guru/masuk";
+      return;
+    }
+
+    setTeacherName(session.name);
+    setTeacherId(session.id);
+
+    const fetchData = async () => {
+      setLoading(true);
+
+      // 1. Ambil kursus guru ini
+      const { data: courses } = await supabase
+        .from("courses")
+        .select("id, name")
+        .eq("teacher_id", session.id);
+
+      const courseList = courses || [];
+      const courseNames = courseList.map((c) => c.name);
+      const courseIds = courseList.map((c) => c.id);
+      setMyCourses(courseNames);
+
+      if (courseIds.length === 0) {
+        setMySchedule([]);
+        setMyStudents([]);
+        setMyAttendance([]);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Ambil jadwal (schedules) untuk kursus-kursus ini
+      const { data: schedules } = await supabase
+        .from("schedules")
+        .select("id, day, time, courses!inner(name), students!inner(name)")
+        .in("course_id", courseIds);
+
+      const schedList: ScheduleItem[] = (schedules || []).map((s: any) => ({
+        id: s.id,
+        day: s.day,
+        time: s.time,
+        student: s.students?.name || "",
+        course: s.courses?.name || "",
+      }));
+      setMySchedule(schedList);
+
+      // 3. Daftar murid unik per kursus
+      const seen = new Set<string>();
+      const uniqueStudents: StudentItem[] = [];
+      for (const s of schedList) {
+        const key = `${s.student}-${s.course}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueStudents.push({ name: s.student, course: s.course, day: s.day, time: s.time });
+        }
+      }
+      setMyStudents(uniqueStudents);
+
+      // 4. Ambil sesi/absensi untuk semua jadwal guru ini
+      const { data: sessions } = await supabase
+        .from("sessions")
+        .select("status, schedules!inner(id, course_id, courses!inner(name), students!inner(name))")
+        .in("schedules.course_id", courseIds);
+
+      // Hitung statistik per murid
+      const statsMap: Record<string, { total: number; hadir: number; alpha: number; course: string }> = {};
+      for (const ses of (sessions as any[] || [])) {
+        const schedule = ses.schedules;
+        const studentName = schedule?.students?.name || "";
+        const courseName = schedule?.courses?.name || "";
+        const key = `${studentName}||${courseName}`;
+        if (!statsMap[key]) {
+          statsMap[key] = { total: 0, hadir: 0, alpha: 0, course: courseName };
+        }
+        statsMap[key].total += 1;
+        if (ses.status === "hadir" || ses.status === "selesai") statsMap[key].hadir += 1;
+        else if (ses.status === "alpha") statsMap[key].alpha += 1;
+      }
+
+      const attData: AttendanceStat[] = Object.entries(statsMap).map(([key, val]) => {
+        const studentName = key.split("||")[0];
+        const pct = val.total > 0 ? ((val.hadir / val.total) * 100).toFixed(1) + "%" : "0%";
+        return { student: studentName, course: val.course, total: val.total, hadir: val.hadir, alpha: val.alpha, pct };
+      });
+      setMyAttendance(attData);
+
+      setLoading(false);
+    };
+
+    fetchData();
   }, []);
 
-  // Data yang difilter berdasarkan guru yang login
-  const myCourses = teacherName ? teacherCourses[teacherName] || [] : [];
-  const mySchedule = scheduleToday.filter(s => myCourses.includes(s.course));
-  const myStudents = students.filter(s => myCourses.includes(s.course));
-  const myAttendance = attendanceData.filter(s => myCourses.includes(s.course));
-  const myPastSessions = pastSessions; // history semua — bisa difilter nanti
-
   // Stats personal
+  const dayMap: Record<string, string> = { "Sunday":"Minggu","Monday":"Senin","Tuesday":"Selasa","Wednesday":"Rabu","Thursday":"Kamis","Friday":"Jumat","Saturday":"Sabtu" };
+  const todayName = dayMap[new Date().toLocaleDateString("en-US", { weekday: "long" })] || "Senin";
+
+  const todaySchedule = mySchedule
+    .filter(s => s.day === todayName)
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .filter((s, i, arr) => i === 0 || s.id !== arr[i-1].id || s.time !== arr[i-1].time);
+
   const myStats = [
     { label: "Total Murid", value: myStudents.length },
     { label: "Kursus Aktif", value: myCourses.length },
-    { label: "Jadwal Hari Ini", value: mySchedule.length },
-    { label: "Murid Aktif", value: myStudents.filter(s => s.status === "Aktif").length },
+    { label: "Jadwal Hari Ini", value: todaySchedule.length },
+    { label: "Total Sesi", value: myAttendance.reduce((sum, a) => sum + a.total, 0) },
   ];
 
-  // Live timer untuk session yang sedang berlangsung
+  // Live timer
   useEffect(() => {
     const interval = setInterval(() => {
       setTimerDisplay((prev) => {
@@ -122,9 +171,16 @@ export default function TeacherDashboard() {
         return next;
       });
     }, 1000);
-
     return () => clearInterval(interval);
   }, [sessionStatus, sessionStart]);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#030712", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ color: "#9ca3af", fontSize: "16px" }}>Memuat data...</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -148,7 +204,6 @@ export default function TeacherDashboard() {
           overflow: 'hidden',
         }}
       >
-        {/* Toggle button */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           style={{
@@ -174,7 +229,6 @@ export default function TeacherDashboard() {
           </svg>
         </button>
 
-        {/* Logo */}
         <div
           style={{
             padding: isCollapsed ? '0' : '0 20px',
@@ -196,7 +250,6 @@ export default function TeacherDashboard() {
           )}
         </div>
 
-        {/* Menu */}
         <nav
           style={{
             display: 'flex',
@@ -234,7 +287,6 @@ export default function TeacherDashboard() {
                   if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
-                {/* Icon */}
                 <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                   {item === "Beranda" && (
                     <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
@@ -252,14 +304,12 @@ export default function TeacherDashboard() {
                     </svg>
                   )}
                 </span>
-                {/* Text */}
                 {!isCollapsed && <span>{item}</span>}
               </button>
             );
           })}
         </nav>
 
-        {/* Logout */}
         <div
           style={{
             marginTop: 'auto',
@@ -327,7 +377,6 @@ export default function TeacherDashboard() {
         {/* ─── BERANDA ─── */}
         {active === "Beranda" && (
           <>
-            {/* Stat Cards */}
             <div
               style={{
                 display: 'grid',
@@ -369,7 +418,6 @@ export default function TeacherDashboard() {
               ))}
             </div>
 
-            {/* Jadwal Hari Ini */}
             <div
               style={{
                 backgroundColor: '#111827',
@@ -388,161 +436,152 @@ export default function TeacherDashboard() {
               >
                 Jadwal Hari Ini
               </h2>
-              {mySchedule.map((s, i) => {
-              const status = sessionStatus[s.id] || "scheduled";
-              const isOngoing = status === "ongoing";
-              const isDone = status === "completed";
+              {todaySchedule.length === 0 ? (
+                <p style={{ color: '#6b7280', fontSize: '14px' }}>Tidak ada jadwal hari ini.</p>
+              ) : (
+                todaySchedule.map((s, i) => {
+                  const status = sessionStatus[s.id] || "scheduled";
+                  const isOngoing = status === "ongoing";
+                  const isDone = status === "completed";
 
-              return (
-                <div
-                  key={s.id}
-                  style={{
-                    display: 'flex',
-                    gap: isMobile ? '8px' : '16px',
-                    flexWrap: isMobile ? 'wrap' : 'nowrap',
-                    padding: '0 0 12px 0',
-                    marginBottom: i < mySchedule.length - 1 ? '12px' : '0',
-                    borderBottom: i < mySchedule.length - 1 ? '1px solid #1f2937' : 'none',
-                    position: 'relative',
-                    opacity: isDone ? 0.5 : 1,
-                  }}
-                >
-                  {/* Time */}
-                  <div
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      color: isDone ? '#6b7280' : '#059669',
-                      minWidth: '50px',
-                      paddingTop: '2px',
-                    }}
-                  >
-                    {s.time}
-                  </div>
-
-                  {/* Timeline dot + line */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      width: '12px',
-                      position: 'relative',
-                    }}
-                  >
+                  return (
                     <div
+                      key={s.id}
                       style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: isDone ? '#6b7280' : isOngoing ? '#fbbf24' : '#059669',
-                        marginTop: '6px',
-                        flexShrink: 0,
+                        display: 'flex',
+                        gap: isMobile ? '8px' : '16px',
+                        flexWrap: isMobile ? 'wrap' : 'nowrap',
+                        padding: '0 0 12px 0',
+                        marginBottom: i < todaySchedule.length - 1 ? '12px' : '0',
+                        borderBottom: i < todaySchedule.length - 1 ? '1px solid #1f2937' : 'none',
+                        position: 'relative',
+                        opacity: isDone ? 0.5 : 1,
                       }}
-                    />
-                    {i < mySchedule.length - 1 && (
+                    >
                       <div
                         style={{
-                          width: '2px',
-                          flex: 1,
-                          backgroundColor: '#1f2937',
-                          marginTop: '4px',
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div style={{ flex: 1, paddingBottom: i < mySchedule.length - 1 ? '4px' : '0' }}>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: '#9ca3af',
-                        fontWeight: 500,
-                        marginBottom: '2px',
-                      }}
-                    >
-                      {s.day}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: '#fff',
-                      }}
-                    >
-                      {s.student}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: isOngoing ? '#fbbf24' : '#6b7280',
-                      }}
-                    >
-                      {isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : s.course}
-                    </div>
-                  </div>
-
-                  {/* Button */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      width: isMobile ? '100%' : 'auto',
-                    }}
-                  >
-                    {!isDone && (
-                      <button
-                        onClick={() => {
-                          if (isOngoing) {
-                            setSessionStatus((prev) => ({ ...prev, [s.id]: "completed" }));
-                          } else {
-                            setSessionStatus((prev) => ({ ...prev, [s.id]: "ongoing" }));
-                            setSessionStart((prev) => ({ ...prev, [s.id]: Date.now() }));
-                          }
-                        }}
-                        style={{
-                          backgroundColor: isOngoing ? '#1e3a2f' : '#059669',
-                          color: isOngoing ? '#34d399' : '#fff',
-                          border: isOngoing ? '1px solid #34d399' : 'none',
-                          borderRadius: '8px',
-                          padding: '10px 16px',
-                          fontSize: '13px',
+                          fontSize: '14px',
                           fontWeight: 600,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                          width: isMobile ? '100%' : 'auto',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = isOngoing ? '#2a4a3f' : '#047857';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = isOngoing ? '#1e3a2f' : '#059669';
+                          color: isDone ? '#6b7280' : '#059669',
+                          minWidth: '50px',
+                          paddingTop: '2px',
                         }}
                       >
-                        {isOngoing ? "Selesai" : "Mulai"}
-                      </button>
-                    )}
-                    {isDone && (
+                        {s.time}
+                      </div>
+
                       <div
                         style={{
-                          textAlign: 'right',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          width: '12px',
+                          position: 'relative',
                         }}
                       >
                         <div
                           style={{
-                            fontSize: '11px',
-                            color: '#6b7280',
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            backgroundColor: isDone ? '#6b7280' : isOngoing ? '#fbbf24' : '#059669',
+                            marginTop: '6px',
+                            flexShrink: 0,
+                          }}
+                        />
+                        {i < todaySchedule.length - 1 && (
+                          <div
+                            style={{
+                              width: '2px',
+                              flex: 1,
+                              backgroundColor: '#1f2937',
+                              marginTop: '4px',
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, paddingBottom: i < todaySchedule.length - 1 ? '4px' : '0' }}>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: '#9ca3af',
+                            fontWeight: 500,
+                            marginBottom: '2px',
                           }}
                         >
-                          ✓ {Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m
+                          {s.day}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: '#fff',
+                          }}
+                        >
+                          {s.student}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: isOngoing ? '#fbbf24' : '#6b7280',
+                          }}
+                        >
+                          {isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : s.course}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          width: isMobile ? '100%' : 'auto',
+                        }}
+                      >
+                        {!isDone && (
+                          <button
+                            onClick={() => {
+                              if (isOngoing) {
+                                setSessionStatus((prev) => ({ ...prev, [s.id]: "completed" }));
+                              } else {
+                                setSessionStatus((prev) => ({ ...prev, [s.id]: "ongoing" }));
+                                setSessionStart((prev) => ({ ...prev, [s.id]: Date.now() }));
+                              }
+                            }}
+                            style={{
+                              backgroundColor: isOngoing ? '#1e3a2f' : '#059669',
+                              color: isOngoing ? '#34d399' : '#fff',
+                              border: isOngoing ? '1px solid #34d399' : 'none',
+                              borderRadius: '8px',
+                              padding: '10px 16px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              width: isMobile ? '100%' : 'auto',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = isOngoing ? '#2a4a3f' : '#047857';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = isOngoing ? '#1e3a2f' : '#059669';
+                            }}
+                          >
+                            {isOngoing ? "Selesai" : "Mulai"}
+                          </button>
+                        )}
+                        {isDone && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                              ✓ {Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </>
         )}
@@ -550,521 +589,124 @@ export default function TeacherDashboard() {
         {/* ─── MURID ─── */}
         {active === "Murid" && (
           <>
-            {/* Filter tabs */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '8px',
-                marginBottom: '24px',
-                flexWrap: 'wrap',
-              }}
-            >
-              {["Semua Hari", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setFilterDay(tab === "Semua Hari" ? null : tab)}
-                  style={{
-                    backgroundColor: filterDay === (tab === "Semua Hari" ? null : tab) ? '#1f2937' : 'transparent',
-                    color: filterDay === (tab === "Semua Hari" ? null : tab) ? '#fff' : '#9ca3af',
-                    border: '1px solid #1f2937',
-                    borderRadius: '8px',
-                    padding: isMobile ? '6px 12px' : '8px 16px',
-                    fontSize: isMobile ? '12px' : '13px',
-                    fontWeight: filterDay === (tab === "Semua Hari" ? null : tab) ? 600 : 400,
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (filterDay !== (tab === "Semua Hari" ? null : tab)) e.currentTarget.style.backgroundColor = '#1a1a2e';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (filterDay !== (tab === "Semua Hari" ? null : tab)) e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
+            {/* Group by day */}
+            {(() => {
+              const dayOrder = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"];
+              const grouped: Record<string, typeof myStudents> = {};
+              for (const s of myStudents) {
+                if (!grouped[s.day]) grouped[s.day] = [];
+                grouped[s.day].push(s);
+              }
 
-            {/* Single table */}
-            <div
-              style={{
-                backgroundColor: '#111827',
-                border: '1px solid #1f2937',
-                borderRadius: '12px',
-                overflowX: 'auto',
-              }}
-            >
-              <table
-                style={{
-                  width: '100%',
-                  minWidth: isMobile ? '500px' : 'auto',
-                  borderCollapse: 'collapse',
-                }}
-              >
-                <thead>
-                  <tr style={{ backgroundColor: '#1a1a2e' }}>
-                    {["Hari", "Jam", "Nama", "Kursus", "Mulai", "Status"].map((h) => (
-                      <th
-                        key={h}
+              return dayOrder.map(day => {
+                const items = grouped[day];
+                if (!items || items.length === 0) return null;
+                return (
+                  <div key={day}
+                    style={{
+                      backgroundColor: '#111827',
+                      border: '1px solid #1f2937',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        color: '#059669',
+                        marginBottom: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                      }}
+                    >
+                      <span>{day}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 400, color: '#6b7280' }}>
+                        {items.length} murid
+                      </span>
+                    </div>
+                    {items.map((s, i) => (
+                      <div key={`${s.name}-${s.course}`}
                         style={{
-                          textAlign: 'left',
-                          padding: isMobile ? '8px 10px' : '10px 16px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: '#9ca3af',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          whiteSpace: 'nowrap',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 0',
+                          borderBottom: i < items.length - 1 ? '1px solid #1f2937' : 'none',
                         }}
                       >
-                        {h}
-                      </th>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ color: '#fff', fontWeight: 500, fontSize: '14px' }}>{s.name}</span>
+                          <span style={{ color: '#9ca3af', fontSize: '13px' }}>{s.course}</span>
+                        </div>
+                        <span style={{ color: '#6b7280', fontSize: '13px', fontWeight: 500 }}>{s.time}</span>
+                      </div>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"].map((day) => {
-                    const filtered = myStudents.filter((s) => s.day === day && (!filterDay || s.day === filterDay));
-                    if (filtered.length === 0) return null;
-
-                    return (
-                      <React.Fragment key={day}>
-                        {filtered.map((s, si) => (
-                          <tr
-                            key={s.name}
-                            style={{
-                              borderTop: '1px solid #1f2937',
-                              backgroundColor: si === 0 ? '#0f172a' : 'transparent',
-                            }}
-                          >
-                            {si === 0 && (
-                              <td
-                                rowSpan={filtered.length}
-                                style={{
-                                  padding: isMobile ? '8px 10px' : '10px 16px',
-                                  fontSize: '13px',
-                                  fontWeight: 600,
-                                  color: '#059669',
-                                  verticalAlign: 'top',
-                                  paddingTop: '14px',
-                                }}
-                              >
-                                {day}
-                              </td>
-                            )}
-                            <td
-                              style={{
-                                padding: isMobile ? '8px 10px' : '10px 16px',
-                                fontSize: '14px',
-                                fontWeight: 600,
-                                color: '#059669',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {s.time}
-                            </td>
-                            <td
-                              style={{
-                                padding: isMobile ? '8px 10px' : '10px 16px',
-                                fontSize: '14px',
-                                fontWeight: 600,
-                                color: '#fff',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {s.name}
-                            </td>
-                            <td
-                              style={{
-                                padding: isMobile ? '8px 10px' : '10px 16px',
-                                fontSize: '14px',
-                                color: '#d1d5db',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {s.course}
-                            </td>
-                            <td
-                              style={{
-                                padding: isMobile ? '8px 10px' : '10px 16px',
-                                fontSize: '14px',
-                                color: '#6b7280',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {s.startDate}
-                            </td>
-                            <td
-                              style={{
-                                padding: isMobile ? '8px 10px' : '10px 16px',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  backgroundColor: s.status === "Aktif" ? '#1e3a2f' : '#3a2a1e',
-                                  color: s.status === "Aktif" ? '#34d399' : '#fbbf24',
-                                  padding: '3px 8px',
-                                  borderRadius: '6px',
-                                  fontSize: isMobile ? '11px' : '12px',
-                                  fontWeight: 500,
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {s.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  </div>
+                );
+              });
+            })()}
+            {myStudents.length === 0 && (
+              <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada murid.</p>
+            )}
           </>
         )}
 
         {/* ─── LAPORAN ─── */}
         {active === "Laporan" && (
-          <>
-            {/* Stat cards */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-                gap: '16px',
-                marginBottom: '32px',
-              }}
-            >
-              {attendanceStats.map((s) => (
-                <div
-                  key={s.label}
-                  style={{
-                    backgroundColor: '#111827',
-                    border: '1px solid #1f2937',
-                    borderRadius: '12px',
-                    padding: '20px',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '32px',
-                      fontWeight: 700,
-                      color: s.label === "Alpha" ? '#ef4444' : s.label === "Kehadiran" ? '#34d399' : '#fff',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    {s.value}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '13px',
-                      color: '#9ca3af',
-                    }}
-                  >
-                    {s.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Rekap Kehadiran */}
-            <div
-              style={{
-                backgroundColor: '#111827',
-                border: '1px solid #1f2937',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                marginBottom: '24px',
-              }}
-            >
-              <div
-                style={{
-                  padding: '16px 20px',
-                  borderBottom: '1px solid #1f2937',
-                }}
-              >
-                <h2
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    color: '#fff',
-                    margin: 0,
-                  }}
-                >
-                  Rekap Kehadiran — September 2026
-                </h2>
-              </div>
-              <table
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                }}
-              >
-                <thead>
-                  <tr style={{ backgroundColor: '#1a1a2e' }}>
-                    {["Nama", "Kursus", "Total Sesi", "Hadir", "Alpha", "% Kehadiran"].map((h) => (
-                      <th
-                        key={h}
-                        style={{
-                          textAlign: 'left',
-                          padding: '10px 20px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: '#9ca3af',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {myAttendance.map((s) => (
-                    <tr
-                      key={s.name}
-                      style={{
-                        borderTop: '1px solid #1f2937',
-                      }}
-                    >
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          fontWeight: 600,
-                          color: '#fff',
-                        }}
-                      >
-                        {s.name}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: '#d1d5db',
-                        }}
-                      >
-                        {s.course}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: '#d1d5db',
-                        }}
-                      >
-                        {s.total}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: '#34d399',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {s.hadir}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: s.alpha > 0 ? '#ef4444' : '#6b7280',
-                          fontWeight: s.alpha > 0 ? 600 : 400,
-                        }}
-                      >
-                        {s.alpha}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          fontWeight: 700,
-                          color:
-                            parseFloat(s.pct) >= 90
-                              ? '#34d399'
-                              : parseFloat(s.pct) >= 80
-                              ? '#fbbf24'
-                              : '#ef4444',
-                        }}
-                      >
-                        {s.pct}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Log Sesi */}
-            <div
-              style={{
-                backgroundColor: '#111827',
-                border: '1px solid #1f2937',
-                borderRadius: '12px',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  padding: '16px 20px',
-                  borderBottom: '1px solid #1f2937',
-                }}
-              >
-                <h2
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    color: '#fff',
-                    margin: 0,
-                  }}
-                >
-                  Log Sesi Mengajar
-                </h2>
-              </div>
-              <table
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                }}
-              >
-                <thead>
-                  <tr style={{ backgroundColor: '#1a1a2e' }}>
-                    {["Tanggal", "Hari", "Murid", "Jam", "Durasi", "Status"].map((h) => (
-                      <th
-                        key={h}
-                        style={{
-                          textAlign: 'left',
-                          padding: '10px 20px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: '#9ca3af',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-              // Gabung sesi lalu + sesi hari ini yang sudah selesai
-              const todayDone = scheduleToday
-                .filter((s) => sessionStatus[s.id] === "completed")
-                .map((s) => ({
-                  id: s.id,
-                  date: "Hari ini",
-                  day: s.day,
-                  student: s.student,
-                  time: s.time,
-                  duration: `${Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m`,
-                }));
-              const allLogs = [...todayDone, ...myPastSessions];
-              return allLogs.map((s, i) => (
-                    <tr
-                      key={i}
-                      style={{
-                        borderTop: '1px solid #1f2937',
-                      }}
-                    >
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: '#6b7280',
-                        }}
-                      >
-                        {s.date}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: '#d1d5db',
-                        }}
-                      >
-                        {s.day}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          fontWeight: 600,
-                          color: '#fff',
-                        }}
-                      >
-                        {s.student}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: '#d1d5db',
-                        }}
-                      >
-                        {s.time}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                          fontSize: '14px',
-                          color: '#6b7280',
-                        }}
-                      >
-                        {s.duration}
-                      </td>
-                      <td
-                        style={{
-                          padding: '10px 20px',
-                        }}
-                      >
-                        <span
-                          style={{
-                            backgroundColor: '#1e3a2f',
-                            color: '#34d399',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 500,
-                          }}
-                        >
-                          Selesai
-                        </span>
-                      </td>
-                    </tr>
-                  ));
-                })()}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        {/* ─── Placeholder untuk menu lain ─── */}
-        {active !== "Beranda" && active !== "Murid" && active !== "Laporan" && (
           <div
             style={{
               backgroundColor: '#111827',
               border: '1px solid #1f2937',
               borderRadius: '12px',
-              padding: '32px',
-              textAlign: 'center',
+              padding: '24px',
             }}
           >
-            <p
+            <h2
               style={{
-                color: '#6b7280',
-                fontSize: '14px',
-                margin: 0,
+                fontSize: '16px',
+                fontWeight: 600,
+                color: '#fff',
+                margin: '0 0 16px 0',
               }}
             >
-              Halaman {active.toLowerCase()} akan segera tersedia
-            </p>
+              Laporan Kehadiran
+            </h2>
+            {myAttendance.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada data kehadiran.</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #1f2937' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#9ca3af', fontWeight: 500 }}>Nama</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#9ca3af', fontWeight: 500 }}>Kursus</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', color: '#9ca3af', fontWeight: 500 }}>Total</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', color: '#34d399', fontWeight: 500 }}>Hadir</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', color: '#ef4444', fontWeight: 500 }}>Alpha</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', color: '#9ca3af', fontWeight: 500 }}>%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myAttendance.map((a, i) => (
+                      <tr
+                        key={a.student}
+                        style={{ borderBottom: i < myAttendance.length - 1 ? '1px solid #1f2937' : 'none' }}
+                      >
+                        <td style={{ padding: '12px 16px', color: '#fff', fontWeight: 500 }}>{a.student}</td>
+                        <td style={{ padding: '12px 16px', color: '#9ca3af' }}>{a.course}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', color: '#9ca3af' }}>{a.total}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', color: '#34d399', fontWeight: 600 }}>{a.hadir}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', color: '#ef4444' }}>{a.alpha}</td>
+                        <td style={{ padding: '12px 16px', textAlign: 'center', color: '#fff', fontWeight: 600 }}>{a.pct}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </main>
