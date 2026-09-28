@@ -107,7 +107,7 @@ export default function AdminDashboard() {
     const availabilityJson = JSON.stringify(availability);
 
     if (editGuru) {
-      await supabase.from("teachers").update({ name: guruForm.name.trim(), phone: guruForm.phone.trim(), availability: availabilityJson }).eq("id", editGuru.id);
+      await supabase.from("teachers").update({ name: guruForm.name.trim().toUpperCase(), phone: guruForm.phone.trim(), availability: availabilityJson }).eq("id", editGuru.id);
 
       // Hapus course assignments lama, set baru
       await supabase.from("courses").update({ teacher_id: null }).eq("teacher_id", editGuru.id);
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
         await supabase.from("courses").update({ teacher_id: editGuru.id }).in("id", guruForm.selectedCourseIds);
       }
     } else {
-      const { data } = await supabase.from("teachers").insert({ name: guruForm.name.trim(), phone: guruForm.phone.trim(), password: "guru123", availability: availabilityJson }).select().single();
+      const { data } = await supabase.from("teachers").insert({ name: guruForm.name.trim().toUpperCase(), phone: guruForm.phone.trim(), password: "guru123", availability: availabilityJson }).select().single();
       if (data && guruForm.selectedCourseIds.length > 0) {
         await supabase.from("courses").update({ teacher_id: data.id }).in("id", guruForm.selectedCourseIds);
       }
@@ -549,7 +549,7 @@ function StudentManager() {
   // Save edit
   const saveEdit = async () => {
     if (!editModal) return;
-    await supabase.from("students").update({ name: editModal.name, phone: editModal.phone, status: editModal.status }).eq("id", editModal.id);
+    await supabase.from("students").update({ name: editModal.name.trim().toUpperCase(), phone: editModal.phone, status: editModal.status }).eq("id", editModal.id);
     setEditModal(null);
     fetchStudents();
   };

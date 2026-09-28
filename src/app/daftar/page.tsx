@@ -40,7 +40,7 @@ export default function DaftarPage() {
     const { data: existing } = await supabase
       .from("students")
       .select("id")
-      .eq("name", form.nama.trim())
+      .ilike("name", form.nama.trim())
       .eq("phone", cleanPhone)
       .single();
 
@@ -52,7 +52,7 @@ export default function DaftarPage() {
 
     // Simpan ke Supabase — status default "pending"
     const { error: err } = await supabase.from("students").insert({
-      name: form.nama.trim(),
+      name: form.nama.trim().toUpperCase(),
       phone: cleanPhone,
       status: "pending",
     });

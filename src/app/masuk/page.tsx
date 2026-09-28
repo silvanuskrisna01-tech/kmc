@@ -25,7 +25,7 @@ export default function MasukPage() {
     const { data, error: err } = await supabase
       .from("students")
       .select("id, name, phone, status")
-      .eq("name", nama.trim())
+      .ilike("name", nama.trim())
       .eq("phone", cleanPhone)
       .single();
 
