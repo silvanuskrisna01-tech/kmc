@@ -9,7 +9,7 @@ type SessionItem = { id: number; date: string; day: string; time: string; course
 
 const monthMap = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
-function getSessionStatus(dateStr: string): "selesai" | "akan datang" {
+function getSessionStatus(dateStr: string, timeStr?: string): "selesai" | "akan datang" {
   const parts = dateStr.split(" ");
   if (parts.length < 2) return "akan datang";
   const [day, month] = parts;
@@ -17,9 +17,19 @@ function getSessionStatus(dateStr: string): "selesai" | "akan datang" {
   if (monthIndex < 0) return "akan datang";
   const today = new Date();
   const sessionDate = new Date(today.getFullYear(), monthIndex, parseInt(day));
-  sessionDate.setHours(0, 0, 0, 0);
+  // Parse time jika ada
+  if (timeStr) {
+    const timeParts = timeStr.replace(" WITA", "").split(":");
+    if (timeParts.length >= 2) {
+      sessionDate.setHours(parseInt(timeParts[0]), parseInt(timeParts[1]), 0, 0);
+    } else {
+      sessionDate.setHours(0, 0, 0, 0);
+    }
+  } else {
+    sessionDate.setHours(0, 0, 0, 0);
+  }
   const t = new Date(today);
-  t.setHours(0, 0, 0, 0);
+  t.setMilliseconds(0);
   return sessionDate < t ? "selesai" : "akan datang";
 }
 
@@ -114,7 +124,7 @@ export default function StudentDashboard() {
             time: s.time,
             course: courseName,
             teacher: teacherName,
-            status: getSessionStatus(s.date),
+            status: getSessionStatus(s.date, s.time),
           });
         } else {
           // Jadwal mingguan — generate hanya untuk bulan ini
@@ -131,7 +141,7 @@ export default function StudentDashboard() {
               time: s.time,
               course: courseName,
               teacher: teacherName,
-              status: getSessionStatus(dayStr),
+              status: getSessionStatus(dayStr, s.time),
             });
           }
         }
