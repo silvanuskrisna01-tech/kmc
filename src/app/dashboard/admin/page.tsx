@@ -206,8 +206,9 @@ export default function AdminDashboard() {
             <div style={{ fontSize: '14px', fontWeight: 700, color: '#059669' }}>KMC</div>
           ) : (
             <>
-              <div style={{ fontWeight: 700, fontSize: '14px', color: '#fff', marginBottom: '4px' }}>Krisna Music Course</div>
-              <div style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 600 }}>Panel Admin</div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: '#fff', marginBottom: '2px' }}>Krisna Music Course</div>
+              <div style={{ fontSize: '10px', color: '#6b7280', fontStyle: 'italic' }}>Music Makes Better Days</div>
+              <div style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 600, marginTop: '4px' }}>Panel Admin</div>
             </>
           )}
         </div>

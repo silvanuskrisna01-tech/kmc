@@ -240,10 +240,13 @@ export default function TeacherDashboard() {
             <div style={{ fontSize: '14px', fontWeight: 700, color: '#059669' }}>KMC</div>
           ) : (
             <>
-              <div style={{ fontWeight: 700, fontSize: '14px', color: '#fff', marginBottom: '4px' }}>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: '#fff', marginBottom: '2px' }}>
                 Krisna Music Course
               </div>
-              <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+              <div style={{ fontSize: '10px', color: '#6b7280', fontStyle: 'italic' }}>
+                Music Makes Better Days
+              </div>
+              <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600, marginTop: '4px' }}>
                 {teacherName || "Panel Guru"}
               </div>
             </>

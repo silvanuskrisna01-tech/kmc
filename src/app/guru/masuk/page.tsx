@@ -99,6 +99,7 @@ export default function GuruMasukPage() {
           >
             Guru — Masuk
           </div>
+          <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px", fontStyle: "italic" }}>Music Makes Better Days</div>
         </div>
 
         <form onSubmit={handleSubmit}>
