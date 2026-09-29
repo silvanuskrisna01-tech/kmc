@@ -44,6 +44,9 @@ export default function Hero() {
         <h1 className="glow-text">
           Krisna Music Course
         </h1>
+        <p style={{ color: "#34d399", fontSize: "clamp(16px, 2.5vw, 28px)", fontWeight: 500, marginTop: "16px", letterSpacing: "2px" }}>
+          Music Makes Better Days
+        </p>
         <div style={{ marginTop: '40px' }}>
           <a
             href="/daftar"

@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "KMC — Krisna Music Course | Kursus Musik Profesional di Banjarmasin",
   description:
-    "Kursus musik profesional untuk Piano, Gitar, dan Drum. Belajar dari guru berpengalaman, jadwal fleksibel, laporan perkembangan bulanan.",
+    "Music Makes Better Days — Kursus musik profesional untuk Piano, Gitar, dan Drum di Banjarmasin. Belajar dari guru berpengalaman, jadwal fleksibel.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
