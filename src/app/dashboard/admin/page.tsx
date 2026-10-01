@@ -986,14 +986,21 @@ function SppManager() {
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       {spp.status === "lunas" ? (
-                        <button onClick={() => saveSpp(s.id, spp.amount, "belum")} disabled={saving === s.id}
-                          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: saving === s.id ? 'not-allowed' : 'pointer', backgroundColor: '#3f2f1f', color: '#fbbf24' }}
-                        >{saving === s.id ? "..." : "Batalkan"}</button>
-                      ) : (
-                        <button onClick={() => saveSpp(s.id, spp.amount, "lunas")} disabled={saving === s.id || spp.amount <= 0}
-                          style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: (saving === s.id || spp.amount <= 0) ? 'not-allowed' : 'pointer', backgroundColor: (saving === s.id || spp.amount <= 0) ? '#374151' : '#065f46', color: (saving === s.id || spp.amount <= 0) ? '#6b7280' : '#34d399' }}
-                        >{saving === s.id ? "..." : "Tandai Lunas"}</button>
-                      )}
+                                              <button onClick={() => saveSpp(s.id, spp.amount, "belum")} disabled={saving === s.id}
+                                                style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: saving === s.id ? 'not-allowed' : 'pointer', backgroundColor: '#3f2f1f', color: '#fbbf24' }}
+                                              >{saving === s.id ? "..." : "Batalkan"}</button>
+                                            ) : (
+                                              <>
+                                                {!spp.id && spp.amount > 0 && (
+                                                  <button onClick={() => saveSpp(s.id, spp.amount, "belum")} disabled={saving === s.id}
+                                                    style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: saving === s.id ? 'not-allowed' : 'pointer', backgroundColor: '#1f2937', color: '#d1d5db', marginRight: '6px' }}
+                                                  >{saving === s.id ? "..." : "Simpan"}</button>
+                                                )}
+                                                <button onClick={() => saveSpp(s.id, spp.amount, "lunas")} disabled={saving === s.id || spp.amount <= 0}
+                                                  style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: (saving === s.id || spp.amount <= 0) ? 'not-allowed' : 'pointer', backgroundColor: (saving === s.id || spp.amount <= 0) ? '#374151' : '#065f46', color: (saving === s.id || spp.amount <= 0) ? '#6b7280' : '#34d399' }}
+                                                >{saving === s.id ? "..." : "Tandai Lunas"}</button>
+                                              </>
+                                            )}
                     </td>
                   </tr>
                 );

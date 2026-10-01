@@ -80,29 +80,18 @@ export default function AuthPage() {
               fontSize: '36px',
               marginBottom: '24px',
             }}
-          >
-            🎓
+          >            👨‍🏫
           </div>
           <h2
             style={{
               fontSize: '24px',
               fontWeight: 700,
               color: '#fff',
-              margin: '0 0 8px 0',
+              margin: 0,
             }}
           >
             Guru
           </h2>
-          <p
-            style={{
-              fontSize: '14px',
-              color: '#9ca3af',
-              margin: 0,
-              textAlign: 'center',
-            }}
-          >
-            Kelola kursus, murid,<br />dan jadwal mengajar
-          </p>
         </a>
 
         {/* Card Student */}
@@ -143,29 +132,18 @@ export default function AuthPage() {
               fontSize: '36px',
               marginBottom: '24px',
             }}
-          >
-            🎵
+          >            👩‍🎓
           </div>
           <h2
             style={{
               fontSize: '24px',
               fontWeight: 700,
               color: '#fff',
-              margin: '0 0 8px 0',
+              margin: 0,
             }}
           >
             Murid
           </h2>
-          <p
-            style={{
-              fontSize: '14px',
-              color: '#9ca3af',
-              margin: 0,
-              textAlign: 'center',
-            }}
-          >
-            Masuk ke akun<br />murid kamu
-          </p>
         </a>
       </div>
     </div>

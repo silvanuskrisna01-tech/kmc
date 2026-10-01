@@ -127,22 +127,30 @@ export default function StudentDashboard() {
             status: getSessionStatus(s.date, s.time),
           });
         } else {
-          // Jadwal mingguan — generate hanya untuk bulan ini
-          const currentMonth = new Date().getMonth();
-          for (let w = 0; w < 4; w++) {
-            const futureDate = new Date();
-            futureDate.setDate(futureDate.getDate() + (w * 7));
-            if (futureDate.getMonth() !== currentMonth) break;
-            const dayStr = `${futureDate.getDate()} ${monthMap[futureDate.getMonth()]}`;
-            schedList.push({
-              id: s.id * 100 + w,
-              day: s.day,
-              date: dayStr,
-              time: s.time,
-              course: courseName,
-              teacher: teacherName,
-              status: getSessionStatus(dayStr, s.time),
-            });
+          // Jadwal mingguan — generate mulai hari yang sesuai
+          const dayIdx: Record<string, number> = { "Minggu":0,"Senin":1,"Selasa":2,"Rabu":3,"Kamis":4,"Jumat":5,"Sabtu":6 };
+          const targetDay = dayIdx[s.day] ?? -1;
+          if (targetDay >= 0) {
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const daysUntil = (targetDay - today.getDay() + 7) % 7;
+            const firstDate = new Date(today);
+            firstDate.setDate(today.getDate() + daysUntil);
+            for (let w = 0; w < 4; w++) {
+              const d = new Date(firstDate);
+              d.setDate(firstDate.getDate() + (w * 7));
+              if (d.getMonth() !== currentMonth) break;
+              const dayStr = d.getDate() + ' ' + monthMap[d.getMonth()];
+              schedList.push({
+                id: s.id * 100 + w,
+                day: s.day,
+                date: dayStr,
+                time: s.time,
+                course: courseName,
+                teacher: teacherName,
+                status: getSessionStatus(dayStr, s.time),
+              });
+            }
           }
         }
       }
@@ -187,7 +195,12 @@ export default function StudentDashboard() {
   }, []);
 
   // Turunan data
-  const currentMonthLabel = monthMap[new Date().getMonth()];
+    const currentMonthLabel = monthMap[new Date().getMonth()];
+    const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    const hasCurrentMonthSpp = sppData.some(s => s.month === currentMonthKey);
+    const sppDisplayData = hasCurrentMonthSpp
+      ? sppData
+      : [{ month: currentMonthKey, amount: 0, status: "belum", paid_at: null }, ...sppData];
   const scheduleThisMonth = scheduleItems
     .filter(s => s.date.includes(currentMonthLabel))
     .sort((a, b) => parseDateId(a.date) - parseDateId(b.date));
@@ -637,43 +650,44 @@ export default function StudentDashboard() {
               >
                 Status SPP
               </h2>
-              {sppData.length === 0 ? (
-                <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada data SPP.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {sppData.slice(0, 3).map((s, i) => {
-                    const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-                    const [y, m] = s.month.split("-");
-                    const label = months[parseInt(m) - 1] + " " + y;
-                    const lunas = s.status === "lunas";
-                    return (
-                      <div
-                        key={i}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '10px 14px',
-                          backgroundColor: '#1a1a2e',
-                          borderRadius: '8px',
-                        }}
-                      >
-                        <span style={{ fontSize: '14px', color: '#d1d5db', fontWeight: 500 }}>{label}</span>
-                        <span style={{ fontSize: '14px', color: '#9ca3af' }}>Rp {s.amount.toLocaleString('id-ID')}</span>
-                        <span style={{
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          color: lunas ? '#059669' : '#f59e0b',
-                          backgroundColor: lunas ? 'rgba(5,150,105,0.15)' : 'rgba(245,158,11,0.15)',
-                          padding: '4px 12px',
-                          borderRadius: '6px',
-                        }}>
-                          {lunas ? '✓ Lunas' : 'Belum'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {sppData.length > 3 && (
+              {sppDisplayData.length === 0 ? (
+                              <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada data SPP.</p>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {sppDisplayData.slice(0, 3).map((s, i) => {
+                                  const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+                                  const [y, m] = s.month.split("-");
+                                  const label = months[parseInt(m) - 1] + " " + y;
+                                  const lunas = s.status === "lunas";
+                                  const belumDiinput = s.amount === 0 && s.status === "belum";
+                                  return (
+                                    <div
+                                      key={i}
+                                      style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '10px 14px',
+                                        backgroundColor: '#1a1a2e',
+                                        borderRadius: '8px',
+                                      }}
+                                    >
+                                      <span style={{ fontSize: '14px', color: '#d1d5db', fontWeight: 500 }}>{label}</span>
+                                      <span style={{ fontSize: '14px', color: '#9ca3af' }}>{belumDiinput ? '-' : `Rp ${s.amount.toLocaleString('id-ID')}`}</span>
+                                      <span style={{
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        color: lunas ? '#059669' : belumDiinput ? '#6b7280' : '#f59e0b',
+                                        backgroundColor: lunas ? 'rgba(5,150,105,0.15)' : belumDiinput ? 'rgba(107,114,128,0.15)' : 'rgba(245,158,11,0.15)',
+                                        padding: '4px 12px',
+                                        borderRadius: '6px',
+                                      }}>
+                                        {lunas ? '✓ Lunas' : belumDiinput ? 'Belum diinput' : 'Belum'}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                                {sppDisplayData.length > 3 && (
                     <button
                       onClick={() => setActive("SPP")}
                       style={{
@@ -936,21 +950,22 @@ export default function StudentDashboard() {
                   Riwayat Pembayaran SPP
                 </h2>
               </div>
-              {sppData.length === 0 ? (
-                <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada data SPP.</p>
-              ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                  }}
-                >
-                  {sppData.map((s, i) => {
-                    const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-                    const [y, m] = s.month.split("-");
-                    const label = months[parseInt(m) - 1] + " " + y;
-                    const lunas = s.status === "lunas";
+              {sppDisplayData.length === 0 ? (
+                              <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada data SPP.</p>
+                            ) : (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '8px',
+                                }}
+                              >
+                                {sppDisplayData.map((s, i) => {
+                                  const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+                                  const [y, m] = s.month.split("-");
+                                  const label = months[parseInt(m) - 1] + " " + y;
+                                  const lunas = s.status === "lunas";
+                                  const belumDiinput = s.amount === 0 && s.status === "belum";
                     return (
                       <div
                         key={i}
@@ -967,31 +982,31 @@ export default function StudentDashboard() {
                       >
                         <div>
                           <div style={{ fontSize: '15px', fontWeight: 600, color: '#fff' }}>{label}</div>
-                          <div style={{ fontSize: '13px', color: '#6b7280' }}>Rp {s.amount.toLocaleString('id-ID')}</div>
-                        </div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                          }}
-                        >
-                          {s.paid_at && (
-                            <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                              {new Date(s.paid_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                            </span>
-                          )}
-                          <span
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 600,
-                              color: lunas ? '#059669' : '#f59e0b',
-                              backgroundColor: lunas ? 'rgba(5,150,105,0.15)' : 'rgba(245,158,11,0.15)',
-                              padding: '4px 14px',
-                              borderRadius: '6px',
-                            }}
-                          >
-                            {lunas ? '✓ Lunas' : 'Belum'}
+                                                    <div style={{ fontSize: '13px', color: '#6b7280' }}>{belumDiinput ? '-' : `Rp ${s.amount.toLocaleString('id-ID')}`}</div>
+                                                  </div>
+                                                  <div
+                                                    style={{
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      gap: '12px',
+                                                    }}
+                                                  >
+                                                    {s.paid_at && (
+                                                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                                                        {new Date(s.paid_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                                                      </span>
+                                                    )}
+                                                    <span
+                                                      style={{
+                                                        fontSize: '13px',
+                                                        fontWeight: 600,
+                                                        color: lunas ? '#059669' : belumDiinput ? '#6b7280' : '#f59e0b',
+                                                        backgroundColor: lunas ? 'rgba(5,150,105,0.15)' : belumDiinput ? 'rgba(107,114,128,0.15)' : 'rgba(245,158,11,0.15)',
+                                                        padding: '4px 14px',
+                                                        borderRadius: '6px',
+                                                      }}
+                                                    >
+                                                      {lunas ? '✓ Lunas' : belumDiinput ? 'Belum diinput' : 'Belum'}
                           </span>
                         </div>
                       </div>
