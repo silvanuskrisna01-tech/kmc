@@ -107,23 +107,30 @@ export default function TeacherDashboard() {
       // 4. Ambil sesi/absensi untuk semua jadwal guru ini
       const { data: sessions } = await supabase
         .from("sessions")
-        .select("status, schedules!inner(id, course_id, courses!inner(name), students!inner(name))")
+        .select("status, date, schedules!inner(id, course_id, courses!inner(name), students!inner(name))")
         .in("schedules.course_id", courseIds);
 
-      // Hitung statistik per murid
-      const statsMap: Record<string, { total: number; hadir: number; alpha: number; course: string }> = {};
-      for (const ses of (sessions as any[] || [])) {
-        const schedule = ses.schedules;
-        const studentName = schedule?.students?.name || "";
-        const courseName = schedule?.courses?.name || "";
-        const key = `${studentName}||${courseName}`;
-        if (!statsMap[key]) {
-          statsMap[key] = { total: 0, hadir: 0, alpha: 0, course: courseName };
-        }
-        statsMap[key].total += 1;
-        if (ses.status === "hadir" || ses.status === "selesai") statsMap[key].hadir += 1;
-        else if (ses.status === "alpha") statsMap[key].alpha += 1;
-      }
+      // Hitung statistik per murid & tandai jadwal yg sdh ada sesinya
+            const statsMap: Record<string, { total: number; hadir: number; alpha: number; course: string }> = {};
+            const completedStatus: Record<number, string> = {};
+            const todayDate = new Date().toISOString().slice(0, 10);
+            for (const ses of (sessions as any[] || [])) {
+              const schedule = ses.schedules;
+              const studentName = schedule?.students?.name || "";
+              const courseName = schedule?.courses?.name || "";
+              const key = `${studentName}||${courseName}`;
+              if (!statsMap[key]) {
+                statsMap[key] = { total: 0, hadir: 0, alpha: 0, course: courseName };
+              }
+              statsMap[key].total += 1;
+              if (ses.status === "hadir" || ses.status === "selesai") statsMap[key].hadir += 1;
+              else if (ses.status === "alpha") statsMap[key].alpha += 1;
+              // Tandai jadwal yg sdh ada sesi hari ini sebagai completed
+              if (ses.date === todayDate && schedule?.id) {
+                completedStatus[schedule.id] = "completed";
+              }
+            }
+            setSessionStatus(completedStatus);
 
       const attData: AttendanceStat[] = Object.entries(statsMap).map(([key, val]) => {
         const studentName = key.split("||")[0];
@@ -542,15 +549,22 @@ export default function TeacherDashboard() {
                         }}
                       >
                         {!isDone && (
-                          <button
-                            onClick={() => {
-                              if (isOngoing) {
-                                setSessionStatus((prev) => ({ ...prev, [s.id]: "completed" }));
-                              } else {
-                                setSessionStatus((prev) => ({ ...prev, [s.id]: "ongoing" }));
-                                setSessionStart((prev) => ({ ...prev, [s.id]: Date.now() }));
-                              }
-                            }}
+                                                  <button
+                                                    onClick={() => {
+                                                      if (isOngoing) {
+                                                        setSessionStatus((prev) => ({ ...prev, [s.id]: "completed" }));
+                                                        // Simpan sesi ke database
+                                                        supabase.from("sessions").insert({
+                                                          schedule_id: s.id,
+                                                          date: new Date().toISOString().slice(0, 10),
+                                                          status: "hadir",
+                                                          notes: `${Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m`,
+                                                        }).then();
+                                                      } else {
+                                                        setSessionStatus((prev) => ({ ...prev, [s.id]: "ongoing" }));
+                                                        setSessionStart((prev) => ({ ...prev, [s.id]: Date.now() }));
+                                                      }
+                                                    }}
                             style={{
                               backgroundColor: isOngoing ? '#1e3a2f' : '#059669',
                               color: isOngoing ? '#34d399' : '#fff',
