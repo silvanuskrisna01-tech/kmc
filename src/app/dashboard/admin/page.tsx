@@ -9,7 +9,7 @@ type Course = { id: string; name: string; teacher_id: string; teacher_name: stri
 const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const timeOptions = Array.from({ length: 13 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00 WITA`);
 
-const MENU = ["Beranda", "Guru", "Kursus", "Murid", "Jadwal", "SPP"];
+const MENU = ["Beranda", "Guru", "Kursus", "Murid", "Jadwal", "Ganti", "SPP"];
 
 export default function AdminDashboard() {
   const [active, setActive] = useState("Beranda");
@@ -169,6 +169,7 @@ export default function AdminDashboard() {
     Murid: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" /></svg>,
     Jadwal: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 8h12v8H4V8z" clipRule="evenodd" /></svg>,
     SPP: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 2a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>,
+    Ganti: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M15 9H1v7a1 1 0 01-1 1h2a1 1 0 012 2l2 2a1 1 0 00-2 2v4a1 1 0 002.586 0l2-2a1 1 0 010 2h12a1 1 0 014.586 0v-8z" clipRule="evenodd" /></svg>,
   };
 
   if (loading) {
@@ -499,6 +500,7 @@ export default function AdminDashboard() {
         {active === "SPP" && (
           <SppManager />
         )}
+      {active === "Ganti" && (<SchedOverrideManager />)}
       </main>
     </div>
   );
@@ -1009,6 +1011,212 @@ function SppManager() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}// ─── Komponen Manajemen Jadwal Sementara ───
+function SchedOverrideManager() {
+  const [students, setStudents] = useState<{ id: string; name: string }[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [overrides, setOverrides] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ student_id: "", schedule_id: "", temp_date: "", temp_day: "Senin", temp_time: "09:00 WITA", reason: "" });
+  const [msg, setMsg] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    const { data: studs } = await supabase.from("students").select("id, name").eq("status", "aktif").order("name");
+    setStudents(studs || []);
+
+    const { data: scheds } = await supabase
+      .from("schedules")
+      .select("id, day, time, students!inner(name), courses!inner(name)")
+      .order("day");
+    setSchedules(scheds || []);
+
+    const { data: ovr } = await supabase
+      .from("schedule_overrides")
+      .select("*, students!inner(name)")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setOverrides(ovr || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const saveOverride = async () => {
+    if (!form.student_id || !form.schedule_id || !form.temp_date) { setMsg("Harap isi semua field"); return; }
+    setMsg("");
+
+    const sched = schedules.find((s: any) => s.id === form.schedule_id);
+    const payload = {
+      student_id: form.student_id,
+      schedule_id: form.schedule_id,
+      temp_date: form.temp_date,
+      temp_day: form.temp_day,
+      temp_time: form.temp_time,
+      original_day: sched?.day || "",
+      original_time: sched?.time || "",
+      reason: form.reason,
+      status: "pending",
+    };
+
+    const { error } = await supabase.from("schedule_overrides").insert(payload);
+    if (error) { setMsg("Gagal: " + error.message); return; }
+    setMsg("✓ Jadwal sementara berhasil dibuat");
+    setShowForm(false);
+    setForm({ student_id: "", schedule_id: "", temp_date: "", temp_day: "Senin", temp_time: "09:00 WITA", reason: "" });
+    fetchData();
+  };
+
+  const deleteOverride = async (id: string) => {
+    if (!confirm("Hapus jadwal sementara ini?")) return;
+    await supabase.from("schedule_overrides").delete().eq("id", id);
+    fetchData();
+  };
+
+  const markUsed = async (id: string) => {
+    await supabase.from("schedule_overrides").update({ status: "used" }).eq("id", id);
+    fetchData();
+  };
+
+  const onStudentChange = (studentId: string) => {
+    const scheds = schedules.filter((s: any) => s.students?.id === studentId);
+    setForm({ ...form, student_id: studentId, schedule_id: scheds.length > 0 ? scheds[0].id : "" });
+  };
+
+  const statusStyle = (status: string) => {
+    const map: Record<string, { bg: string; color: string; label: string }> = {
+      used: { bg: "#065f46", color: "#34d399", label: "Terpakai" },
+      expired: { bg: "#3f1f1f", color: "#f87171", label: "Kadaluarsa" },
+      pending: { bg: "#3f2f1f", color: "#fbbf24", label: "Menunggu" },
+    };
+    return map[status] || map.pending;
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <p style={{ color: "#6b7280", fontSize: "14px", margin: 0 }}>
+          Atur jadwal sementara untuk murid yang ingin ganti hari.
+        </p>
+        <button onClick={() => { setShowForm(!showForm); }}
+          style={{ padding: "10px 20px", backgroundColor: "#059669", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#047857"}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#059669"}
+        >{showForm ? "✕ Tutup" : "+ Jadwal Sementara"}</button>
+      </div>
+
+      {msg && <p style={{ color: msg.startsWith("✓") ? "#34d399" : "#ef4444", fontSize: "14px", margin: "0 0 16px 0" }}>{msg}</p>}
+
+      {showForm && (
+        <div style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "12px", padding: "24px", marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", margin: "0 0 16px 0" }}>Buat Jadwal Sementara</h3>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+            <div style={{ flex: 1, minWidth: "150px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "4px" }}>Murid</label>
+              <select value={form.student_id} onChange={(e) => onStudentChange(e.target.value)}
+                style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none" }}>
+                <option value="">Pilih murid</option>
+                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: "150px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "4px" }}>Jadwal Asli</label>
+              <select value={form.schedule_id} onChange={(e) => setForm({ ...form, schedule_id: e.target.value })}
+                style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none" }}>
+                <option value="">Pilih jadwal</option>
+                {schedules.filter(s => form.student_id === "" || s.students?.id === form.student_id).map(s =>
+                  <option key={s.id} value={s.id}>{s.day} {s.time} — {s.courses?.name || ""}</option>
+                )}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+            <div style={{ minWidth: "140px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "4px" }}>Tanggal Ganti</label>
+              <input type="date" value={form.temp_date} onChange={(e) => setForm({ ...form, temp_date: e.target.value })}
+                style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ minWidth: "120px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "4px" }}>Hari Ganti</label>
+              <select value={form.temp_day} onChange={(e) => setForm({ ...form, temp_day: e.target.value })}
+                style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none" }}>
+                {["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"].map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div style={{ minWidth: "120px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "4px" }}>Jam Ganti</label>
+              <select value={form.temp_time} onChange={(e) => setForm({ ...form, temp_time: e.target.value })}
+                style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none" }}>
+                {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "4px" }}>Alasan Ganti</label>
+            <textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Misal: ada acara keluarga"
+              style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none", boxSizing: "border-box", minHeight: "60px" }} />
+          </div>
+          <button onClick={saveOverride}
+            style={{ padding: "10px 24px", backgroundColor: "#059669", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#047857"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#059669"}
+          >Simpan Jadwal Sementara</button>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ color: "#9ca3af", fontSize: "14px" }}>Memuat...</p>
+      ) : (
+        <div>
+          <p style={{ color: "#9ca3af", fontSize: "13px", marginBottom: "12px" }}>Riwayat Jadwal Sementara ({overrides.length})</p>
+          {overrides.length === 0 ? (
+            <p style={{ color: "#6b7280", fontSize: "14px" }}>Belum ada jadwal sementara.</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #1f2937", color: "#9ca3af", fontSize: "13px", textAlign: "left" }}>
+                  <th style={{ padding: "10px 12px" }}>Murid</th>
+                  <th style={{ padding: "10px 12px" }}>Jadwal Asli</th>
+                  <th style={{ padding: "10px 12px" }}>Ganti ke</th>
+                  <th style={{ padding: "10px 12px" }}>Alasan</th>
+                  <th style={{ padding: "10px 12px" }}>Status</th>
+                  <th style={{ padding: "10px 12px" }}>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overrides.map((o: any) => {
+                  const ss = statusStyle(o.status);
+                  return (
+                    <tr key={o.id} style={{ borderBottom: "1px solid #1f2937", color: "#d1d5db", fontSize: "14px" }}>
+                      <td style={{ padding: "10px 12px", color: "#fff", fontWeight: 500 }}>{o.students?.name || ""}</td>
+                      <td style={{ padding: "10px 12px" }}>{o.original_day} {o.original_time}</td>
+                      <td style={{ padding: "10px 12px", color: "#059669", fontWeight: 500 }}>{o.temp_date} {o.temp_day} {o.temp_time}</td>
+                      <td style={{ padding: "10px 12px" }}>{o.reason || "-"}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{ padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 500, backgroundColor: ss.bg, color: ss.color }}>{ss.label}</span>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        {o.status === "pending" && (
+                          <>
+                            <button onClick={() => markUsed(o.id)} style={{ background: "none", border: "none", color: "#34d399", cursor: "pointer", fontSize: "13px", marginRight: "6px" }}>Tandai</button>
+                            <button onClick={() => deleteOverride(o.id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "13px" }}>Hapus</button>
+                          </>
+                        )}
+                        {o.status !== "pending" && (
+                          <button onClick={() => deleteOverride(o.id)} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "13px" }}>Hapus</button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }

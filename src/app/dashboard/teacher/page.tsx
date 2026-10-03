@@ -29,7 +29,8 @@ export default function TeacherDashboard() {
   const [mySchedule, setMySchedule] = useState<ScheduleItem[]>([]);
   const [myStudents, setMyStudents] = useState<StudentItem[]>([]);
   const [myAttendance, setMyAttendance] = useState<AttendanceStat[]>([]);
-  const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -131,6 +132,19 @@ export default function TeacherDashboard() {
               }
             }
             setSessionStatus(completedStatus);
+
+      // 5. Ambil jadwal sementara (overrides) untuk hari ini
+      const todayDateStr = new Date().toISOString().slice(0, 10);
+      const { data: overrides } = await supabase
+        .from("schedule_overrides")
+        .select("schedule_id, temp_date, temp_day, temp_time, reason, status")
+        .eq("status", "pending")
+        .gte("temp_date", todayDateStr);
+      const overrideMap: Record<string, any> = {};
+      for (const ov of (overrides as any[] || [])) {
+        overrideMap[ov.schedule_id] = ov;
+      }
+      setScheduleOverrides(overrideMap);
 
       const attData: AttendanceStat[] = Object.entries(statsMap).map(([key, val]) => {
         const studentName = key.split("||")[0];
@@ -532,13 +546,25 @@ export default function TeacherDashboard() {
                           {s.student}
                         </div>
                         <div
-                          style={{
-                            fontSize: '12px',
-                            color: isOngoing ? '#fbbf24' : '#6b7280',
-                          }}
-                        >
-                          {isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : s.course}
-                        </div>
+                                                  style={{
+                                                    fontSize: '12px',
+                                                    color: isOngoing ? '#fbbf24' : '#6b7280',
+                                                  }}
+                                                >
+                                                  {isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : s.course}
+                                                </div>
+                                                {/* Badge Jadwal Sementara */}
+                                                {scheduleOverrides[s.id] && !isDone && (
+                                                  <div style={{ marginTop: '4px' }}>
+                                                    <span style={{
+                                                      display: 'inline-block', padding: '2px 8px', borderRadius: '6px',
+                                                      fontSize: '11px', fontWeight: 600, backgroundColor: '#3f2f1f', color: '#fbbf24',
+                                                    }}>
+                                                      🟡 Ganti → {scheduleOverrides[s.id].temp_day} {scheduleOverrides[s.id].temp_time}
+                                                      {scheduleOverrides[s.id].reason ? ` (${scheduleOverrides[s.id].reason})` : ''}
+                                                    </span>
+                                                  </div>
+                                                )}
                       </div>
 
                       <div
