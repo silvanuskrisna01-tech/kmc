@@ -65,7 +65,19 @@ export default function DaftarPage() {
     }
 
     setSubmitted(true);
-  };
+
+        // Kirim notifikasi ke Discord (fire & forget)
+        fetch("/api/notify-registration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.nama.trim().toUpperCase(),
+            phone: cleanPhone,
+            instrument: form.instrumen,
+            notes: form.catatan,
+          }),
+        }).catch(() => {});
+      };
 
   if (submitted) {
     return (
