@@ -62,7 +62,8 @@ export default function StudentDashboard() {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionItem[]>([]);
   const [sppData, setSppData] = useState<{month:string; amount:number; status:string; paid_at:string|null}[]>([]);
-  const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
+    const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
+    const [schedLookup, setSchedLookup] = useState<Record<string, {course:string; teacher:string; day:string; time:string}>>({});
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -159,7 +160,14 @@ export default function StudentDashboard() {
       setMyCourses(courses);
       setScheduleItems(schedList);
 
-      // 2. Ambil sesi history
+            // Simpan lookup jadwal untuk override
+            const lookup: Record<string, {course:string; teacher:string; day:string; time:string}> = {};
+                  for (const s of (schedules as any[] || [])) {
+                    lookup[s.id] = { course: s.courses?.name || "", teacher: s.courses?.teachers?.name || "", day: s.day, time: s.time };
+                  }
+            setSchedLookup(lookup);
+
+            // 2. Ambil sesi history
       const scheduleIds = (schedules as any[] || []).map((s: any) => s.id);
       if (scheduleIds.length > 0) {
         const { data: sessions } = await supabase
@@ -817,11 +825,54 @@ export default function StudentDashboard() {
 
         {/* ─── JADWAL ─── */}
         {active === "Jadwal" && (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
-              gap: '16px',
+                  <>
+                  {/* Notif Override di Jadwal */}
+                  {Object.keys(scheduleOverrides).length > 0 && (
+                    <div style={{ backgroundColor: '#1a1a2e', border: '1px solid #f59e0b', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                      <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#fbbf24', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>🟡</span> Perubahan Jadwal Minggu Ini
+                      </h3>
+                      {(() => {
+                        const dayNames = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+                        const today = new Date();
+                        const thisWeekDates: string[] = [];
+                        const monday = new Date(today);
+                        monday.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
+                        for (let i = 0; i < 7; i++) {
+                          const d = new Date(monday);
+                          d.setDate(monday.getDate() + i);
+                          thisWeekDates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+                        }
+
+                        const schedList = schedLookup;
+
+                                                return Object.entries(scheduleOverrides).map(([schedId, ov]) => {
+                                                  const sched = schedList[schedId];
+                                                  if (!sched) return null;
+                                                  const courseName = sched.course;
+                                                                            const teacherName = sched.teacher;
+                          return (
+                            <div key={schedId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0', borderBottom: '1px solid #1f2937', color: '#d1d5db', fontSize: '14px' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ color: '#fff', fontWeight: 500 }}>{courseName} — {teacherName}</div>
+                                <div style={{ fontSize: '13px', color: '#9ca3af', marginTop: '2px' }}>
+                                  <span style={{ textDecoration: 'line-through', color: '#6b7280' }}>{sched.day} {sched.time}</span>
+                                  <span style={{ color: '#fbbf24', fontWeight: 600 }}> → {ov.temp_day} {ov.temp_time}</span>
+                                  {ov.reason ? <span style={{ color: '#6b7280' }}> ({ov.reason})</span> : ''}
+                                </div>
+                              </div>
+                              <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: '#3f2f1f', color: '#fbbf24' }}>Sementara</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                      gap: '16px',
             }}
           >
             {myCourses.length === 0 ? (
@@ -947,9 +998,10 @@ export default function StudentDashboard() {
               })
             )}
           </div>
-        )}
+                    </>
+                  )}
 
-        {/* ─── SPP ─── */}
+                  {/* ─── SPP ─── */}
         {active === "SPP" && (
           <div
             style={{
