@@ -1030,7 +1030,7 @@ function SchedOverrideManager() {
 
     const { data: scheds } = await supabase
       .from("schedules")
-      .select("id, day, time, students!inner(name), courses!inner(name)")
+      .select("id, day, time, student_id, course_id, students!inner(name), courses!inner(name)")
       .order("day");
     setSchedules(scheds || []);
 
@@ -1082,7 +1082,7 @@ function SchedOverrideManager() {
   };
 
   const onStudentChange = (studentId: string) => {
-    const scheds = schedules.filter((s: any) => s.students?.id === studentId);
+    const scheds = schedules.filter((s: any) => s.student_id === studentId);
     setForm({ ...form, student_id: studentId, schedule_id: scheds.length > 0 ? scheds[0].id : "" });
   };
 
