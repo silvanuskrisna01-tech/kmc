@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 type MyCourse = { course: string; teacher: string; day: string; time: string };
 type ScheduleItem = { id: number; schedId: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" };
-type SessionItem = { id: number; date: string; day: string; time: string; course: string; teacher: string; duration: string; rating: number };
+type SessionItem = { id: number; date: string; day: string; time: string; course: string; teacher: string; duration: string; rating: number; status?: string };
 
 const monthMap = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -187,16 +187,20 @@ export default function StudentDashboard() {
           .select("id, status, date, schedules!inner(id, day, time, courses!inner(name, teachers!inner(name)))")
           .in("schedule_id", scheduleIds);
 
-        const hist: SessionItem[] = (sessions as any[] || []).map((s: any) => ({
-          id: s.id,
-          date: s.date,
-          day: s.schedules?.day || "",
-          time: s.schedules?.time || "",
-          course: s.schedules?.courses?.name || "",
-          teacher: s.schedules?.courses?.teachers?.name || "",
-          duration: "60m",
-          rating: s.status === "hadir" || s.status === "selesai" ? 5 : 3,
-        }));
+        const todayKey = new Date().toISOString().slice(0, 10);
+                const hist: SessionItem[] = (sessions as any[] || [])
+                  .filter((s: any) => s.date <= todayKey)
+                  .map((s: any) => ({
+                  id: s.id,
+                  date: s.date,
+                  day: s.schedules?.day || "",
+                  time: s.schedules?.time || "",
+                  course: s.schedules?.courses?.name || "",
+                  teacher: s.schedules?.courses?.teachers?.name || "",
+                  duration: "60m",
+                  rating: s.status === "hadir" || s.status === "selesai" ? 5 : s.status === "libur" ? 0 : 3,
+                  status: s.status || "",
+                }));
         setSessionHistory(hist.reverse());
       }
 
@@ -324,8 +328,8 @@ export default function StudentDashboard() {
   }, {});
   const nearestSchedule = Object.values(nearestPerCourse);
 
-  const totalSessions = sessionHistory.length;
-  const totalHadir = sessionHistory.length;
+  const totalSessions = sessionHistory.filter(s => s.status !== "libur").length;
+    const totalHadir = sessionHistory.filter(s => s.status === "hadir" || s.status === "selesai" || !s.status).length;
 
   const MENU_ICONS: Record<string, React.ReactNode> = {
     Beranda: (
@@ -751,9 +755,9 @@ export default function StudentDashboard() {
                     <div style={{ fontSize: '14px', fontWeight: 500, color: '#fff' }}>{s.course}</div>
                     <div style={{ fontSize: '12px', color: '#6b7280' }}>{s.teacher} • {s.time} • {s.duration}</div>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#f59e0b', flexShrink: 0 }}>
-                    {renderStars(s.rating)}
-                  </div>
+                  <div style={{ fontSize: '12px', color: s.status === "libur" ? '#6b7280' : '#f59e0b', flexShrink: 0 }}>
+                                      {s.status === "libur" ? "Libur" : renderStars(s.rating)}
+                                    </div>
                 </div>
               ))}
               {sessionHistory.length === 0 && (
