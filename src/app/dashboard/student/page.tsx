@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 type MyCourse = { course: string; teacher: string; day: string; time: string };
-type ScheduleItem = { id: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" };
+type ScheduleItem = { id: number; schedId: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" };
 type SessionItem = { id: number; date: string; day: string; time: string; course: string; teacher: string; duration: string; rating: number };
 
 const monthMap = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
@@ -38,6 +38,16 @@ function parseDateId(dateStr: string): number {
   if (parts.length < 2) return 99;
   const monthIndex = monthMap.indexOf(parts[1]);
   return monthIndex >= 0 ? parseInt(parts[0]) + monthIndex * 100 : 99;
+}
+
+function getMonday(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(s => parseInt(s));
+  const date = new Date(y, m - 1, d);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(date);
+  mon.setDate(date.getDate() + diff);
+  return `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
 }
 
 const MENU = [
@@ -120,45 +130,47 @@ export default function StudentDashboard() {
         // Buat jadwal per sesi (jika ada date, bikin satu baris; kalo ga ada, generate dummy)
         if (s.date) {
           schedList.push({
-            id: s.id,
-            day: s.day,
-            date: s.date,
-            time: s.time,
-            course: courseName,
-            teacher: teacherName,
-            status: getSessionStatus(s.date, s.time),
-          });
-        } else {
-          // Jadwal mingguan — generate mulai hari yang sesuai
-          const dayIdx: Record<string, number> = { "Minggu":0,"Senin":1,"Selasa":2,"Rabu":3,"Kamis":4,"Jumat":5,"Sabtu":6 };
-          const targetDay = dayIdx[s.day] ?? -1;
-          if (targetDay >= 0) {
-            const today = new Date();
-            const currentMonth = today.getMonth();
-            const daysUntil = (targetDay - today.getDay() + 7) % 7;
-            const firstDate = new Date(today);
-            firstDate.setDate(today.getDate() + daysUntil);
-            for (let w = 0; w < 4; w++) {
-              const d = new Date(firstDate);
-              d.setDate(firstDate.getDate() + (w * 7));
-              if (d.getMonth() !== currentMonth) break;
-              const dayStr = d.getDate() + ' ' + monthMap[d.getMonth()];
-              schedList.push({
-                id: s.id * 100 + w,
-                day: s.day,
-                date: dayStr,
-                time: s.time,
-                course: courseName,
-                teacher: teacherName,
-                status: getSessionStatus(dayStr, s.time),
-              });
-            }
-          }
-        }
+                      id: s.id,
+                      schedId: s.id,
+                      day: s.day,
+                      date: s.date,
+                      time: s.time,
+                      course: courseName,
+                      teacher: teacherName,
+                      status: getSessionStatus(s.date, s.time),
+                    });
+                  } else {
+                    // Jadwal mingguan — generate mulai hari yang sesuai
+                    const dayIdx: Record<string, number> = { "Minggu":0,"Senin":1,"Selasa":2,"Rabu":3,"Kamis":4,"Jumat":5,"Sabtu":6 };
+                    const targetDay = dayIdx[s.day] ?? -1;
+                    if (targetDay >= 0) {
+                      const today = new Date();
+                      const currentMonth = today.getMonth();
+                      const daysUntil = (targetDay - today.getDay() + 7) % 7;
+                      const firstDate = new Date(today);
+                      firstDate.setDate(today.getDate() + daysUntil);
+                      for (let w = 0; w < 4; w++) {
+                        const d = new Date(firstDate);
+                        d.setDate(firstDate.getDate() + (w * 7));
+                        if (d.getMonth() !== currentMonth) break;
+                        const dayStr = d.getDate() + ' ' + monthMap[d.getMonth()];
+                        schedList.push({
+                          id: s.id * 100 + w,
+                          schedId: s.id,
+                          day: s.day,
+                          date: dayStr,
+                          time: s.time,
+                          course: courseName,
+                          teacher: teacherName,
+                          status: getSessionStatus(dayStr, s.time),
+                        });
+                      }
+                    }
+                  }
       }
 
       setMyCourses(courses);
-      setScheduleItems(schedList);
+            // setScheduleItems dipanggil setelah override processing
 
             // Simpan lookup jadwal untuk override
             const lookup: Record<string, {course:string; teacher:string; day:string; time:string}> = {};
@@ -198,19 +210,96 @@ export default function StudentDashboard() {
       setSppData(spp || []);
 
             // 4. Ambil jadwal sementara
-            const schedIds = (schedules as any[] || []).map((s: any) => s.id);
-            if (schedIds.length > 0) {
-              const { data: ovr } = await supabase
-                .from("schedule_overrides")
-                .select("schedule_id, temp_date, temp_day, temp_time, reason")
-                .eq("status", "confirmed")
-                .in("schedule_id", schedIds);
-              const ovrMap: Record<string, any> = {};
-              for (const o of (ovr as any[] || [])) {
-                ovrMap[o.schedule_id] = o;
-              }
-              setScheduleOverrides(ovrMap);
-            }
+                        const schedIds = (schedules as any[] || []).map((s: any) => s.id);
+                        let ovrMap: Record<string, any> = {};
+                        if (schedIds.length > 0) {
+                          const { data: ovr } = await supabase
+                            .from("schedule_overrides")
+                            .select("schedule_id, temp_date, temp_day, temp_time, reason")
+                            .eq("status", "confirmed")
+                            .in("schedule_id", schedIds);
+                          for (const o of (ovr as any[] || [])) {
+                            ovrMap[o.schedule_id] = o;
+                          }
+                          setScheduleOverrides(ovrMap);
+                        }
+
+                        // 5. Apply overrides ke schedule items
+                        if (Object.keys(ovrMap).length > 0) {
+                          const processedList: ScheduleItem[] = [];
+                          const addedOverrides = new Set<string>();
+                          const curYear = new Date().getFullYear();
+
+                          for (const item of schedList) {
+                            const ov = ovrMap[String(item.schedId)];
+                            let skip = false;
+
+                            if (ov) {
+                              // Parse item.date to ISO format
+                              const [dStr, mStr] = item.date.split(' ');
+                              const mi = monthMap.indexOf(mStr);
+                              if (mi >= 0) {
+                                const itemIso = `${curYear}-${String(mi + 1).padStart(2, '0')}-${String(parseInt(dStr)).padStart(2, '0')}`;
+                                const itemMon = getMonday(itemIso);
+                                const ovMon = getMonday(ov.temp_date);
+
+                                if (itemMon === ovMon) {
+                                  skip = true;
+                                  const ovKey = `${item.schedId}-${ovMon}`;
+                                  if (!addedOverrides.has(ovKey)) {
+                                    addedOverrides.add(ovKey);
+                                    const tp = ov.temp_date.split('-');
+                                    const ovDateStr = `${parseInt(tp[2])} ${monthMap[parseInt(tp[1]) - 1]}`;
+                                    const sc = lookup[String(item.schedId)];
+                                    if (sc) {
+                                      processedList.push({
+                                        id: item.schedId * 1000 + 500,
+                                        schedId: item.schedId,
+                                        day: ov.temp_day,
+                                        date: ovDateStr,
+                                        time: ov.temp_time,
+                                        course: sc.course,
+                                        teacher: sc.teacher,
+                                        status: getSessionStatus(ovDateStr, ov.temp_time),
+                                      });
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            if (!skip) processedList.push(item);
+                          }
+
+                          // Tambah override untuk bulan depan yang belum generate
+                          for (const [schedId, ov] of Object.entries(ovrMap)) {
+                            const ovMon = getMonday(ov.temp_date);
+                            const k = `${schedId}-${ovMon}`;
+                            if (!addedOverrides.has(k)) {
+                              const tp = ov.temp_date.split('-');
+                              const ovMonth = parseInt(tp[1]) - 1;
+                              if (ovMonth === new Date().getMonth() || ovMonth === (new Date().getMonth() + 1) % 12) {
+                                const ovDateStr = `${parseInt(tp[2])} ${monthMap[ovMonth]}`;
+                                const sc = lookup[schedId];
+                                if (sc) {
+                                  processedList.push({
+                                    id: parseInt(schedId) * 1000 + 500,
+                                    schedId: parseInt(schedId),
+                                    day: ov.temp_day,
+                                    date: ovDateStr,
+                                    time: ov.temp_time,
+                                    course: sc.course,
+                                    teacher: sc.teacher,
+                                    status: getSessionStatus(ovDateStr, ov.temp_time),
+                                  });
+                                }
+                              }
+                            }
+                          }
+
+                          setScheduleItems(processedList);
+                        } else {
+                          setScheduleItems(schedList);
+                        }
 
             setLoading(false);
     };
