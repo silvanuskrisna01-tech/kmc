@@ -62,6 +62,7 @@ export default function StudentDashboard() {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionItem[]>([]);
   const [sppData, setSppData] = useState<{month:string; amount:number; status:string; paid_at:string|null}[]>([]);
+  const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -188,7 +189,22 @@ export default function StudentDashboard() {
         .limit(12);
       setSppData(spp || []);
 
-      setLoading(false);
+            // 4. Ambil jadwal sementara
+            const schedIds = (schedules as any[] || []).map((s: any) => s.id);
+            if (schedIds.length > 0) {
+              const { data: ovr } = await supabase
+                .from("schedule_overrides")
+                .select("schedule_id, temp_date, temp_day, temp_time, reason")
+                .eq("status", "confirmed")
+                .in("schedule_id", schedIds);
+              const ovrMap: Record<string, any> = {};
+              for (const o of (ovr as any[] || [])) {
+                ovrMap[o.schedule_id] = o;
+              }
+              setScheduleOverrides(ovrMap);
+            }
+
+            setLoading(false);
     };
 
     fetchData();
@@ -461,11 +477,29 @@ export default function StudentDashboard() {
               </h2>
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-                gap: '16px',
+                        {/* Notif override */}
+                        {Object.keys(scheduleOverrides).length > 0 && (
+                          <div style={{
+                            backgroundColor: '#1a1a2e', border: '1px solid #f59e0b', borderRadius: '12px',
+                            padding: '16px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px',
+                          }}>
+                            <span style={{ fontSize: '18px' }}>🟡</span>
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#fbbf24', fontSize: '14px', marginBottom: '4px' }}>
+                                Jadwal Sementara
+                              </div>
+                              <div style={{ color: '#d1d5db', fontSize: '13px' }}>
+                                Ada perubahan jadwal untuk minggu ini. Cek tab <span style={{ color: '#059669', fontWeight: 600, cursor: 'pointer' }} onClick={() => setActive("Jadwal")}>Jadwal</span> untuk detail.
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+                            gap: '16px',
                 marginBottom: '32px',
               }}
             >
