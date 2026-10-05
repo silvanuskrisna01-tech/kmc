@@ -138,7 +138,7 @@ export default function TeacherDashboard() {
       const { data: overrides } = await supabase
         .from("schedule_overrides")
         .select("schedule_id, temp_date, temp_day, temp_time, reason, status")
-        .eq("status", "pending")
+        .eq("status", "confirmed")
         .gte("temp_date", todayDateStr);
       const overrideMap: Record<string, any> = {};
       for (const ov of (overrides as any[] || [])) {
