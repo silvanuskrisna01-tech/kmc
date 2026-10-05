@@ -1077,7 +1077,7 @@ function SchedOverrideManager() {
   };
 
   const markUsed = async (id: string) => {
-    await supabase.from("schedule_overrides").update({ status: "used" }).eq("id", id);
+    await supabase.from("schedule_overrides").update({ status: "confirmed" }).eq("id", id);
     fetchData();
   };
 
@@ -1088,8 +1088,7 @@ function SchedOverrideManager() {
 
   const statusStyle = (status: string) => {
     const map: Record<string, { bg: string; color: string; label: string }> = {
-      used: { bg: "#065f46", color: "#34d399", label: "Terpakai" },
-      expired: { bg: "#3f1f1f", color: "#f87171", label: "Kadaluarsa" },
+      confirmed: { bg: "#065f46", color: "#34d399", label: "Dikonfirmasi" },
       pending: { bg: "#3f2f1f", color: "#fbbf24", label: "Menunggu" },
     };
     return map[status] || map.pending;
@@ -1201,7 +1200,7 @@ function SchedOverrideManager() {
                       <td style={{ padding: "10px 12px" }}>
                         {o.status === "pending" && (
                           <>
-                            <button onClick={() => markUsed(o.id)} style={{ background: "none", border: "none", color: "#34d399", cursor: "pointer", fontSize: "13px", marginRight: "6px" }}>Tandai</button>
+                            <button onClick={() => markUsed(o.id)} style={{ background: "none", border: "none", color: "#34d399", cursor: "pointer", fontSize: "13px", marginRight: "6px" }}>Konfirmasi</button>
                             <button onClick={() => deleteOverride(o.id)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "13px" }}>Hapus</button>
                           </>
                         )}
