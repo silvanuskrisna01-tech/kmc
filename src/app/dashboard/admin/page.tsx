@@ -882,7 +882,7 @@ function ScheduleAdmin() {
 // ─── Komponen Manajemen SPP ───
 function SppManager() {
   const [students, setStudents] = useState<{ id: string; name: string }[]>([]);
-  const [sppData, setSppData] = useState<Record<string, { amount: number; status: string; paid_at: string | null; id: string | null }>>({});
+  const [sppData, setSppData] = useState<Record<string, { amount: number; status: string; paid_at: string | null; payment_date: string; id: string | null }>>({});
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -909,10 +909,14 @@ function SppManager() {
     const { data: studs } = await supabase.from("students").select("id, name").eq("status", "aktif").order("name");
     setStudents(studs || []);
     const { data: sppRecords } = await supabase.from("spp").select("id, student_id, amount, status, paid_at").eq("month", selectedMonth);
-    const sppMap: Record<string, { amount: number; status: string; paid_at: string | null; id: string | null }> = {};
+    const sppMap: Record<string, { amount: number; status: string; paid_at: string | null; payment_date: string; id: string | null }> = {};
     for (const s of (studs || [])) {
       const rec = (sppRecords || []).find((r: any) => r.student_id === s.id);
-      sppMap[s.id] = rec ? { amount: rec.amount || 0, status: rec.status || "belum", paid_at: rec.paid_at, id: rec.id } : { amount: 0, status: "belum", paid_at: null, id: null };
+      let payment_date = "";
+      if (rec?.paid_at) {
+        payment_date = new Date(rec.paid_at).toISOString().slice(0, 10);
+      }
+      sppMap[s.id] = rec ? { amount: rec.amount || 0, status: rec.status || "belum", paid_at: rec.paid_at, payment_date, id: rec.id } : { amount: 0, status: "belum", paid_at: null, payment_date: "", id: null };
     }
     setSppData(sppMap);
     setLoading(false);
@@ -923,10 +927,11 @@ function SppManager() {
   const saveSpp = async (studentId: string, amount: number, status: string) => {
     setSaving(studentId);
     const record = sppData[studentId];
+    const paymentDate = status === "lunas" ? (sppData[studentId]?.payment_date || new Date().toISOString().slice(0, 10)) : null;
     if (record?.id) {
-      await supabase.from("spp").update({ amount, status, paid_at: status === "lunas" ? new Date().toISOString() : null }).eq("id", record.id);
+      await supabase.from("spp").update({ amount, status, paid_at: paymentDate }).eq("id", record.id);
     } else {
-      await supabase.from("spp").insert({ student_id: studentId, month: selectedMonth, amount, status, paid_at: status === "lunas" ? new Date().toISOString() : null });
+      await supabase.from("spp").insert({ student_id: studentId, month: selectedMonth, amount, status, paid_at: paymentDate });
     }
     setSaving(null);
     fetchData();
@@ -958,16 +963,17 @@ function SppManager() {
               <th style={{ padding: '12px 16px' }}>No</th>
               <th style={{ padding: '12px 16px' }}>Nama</th>
               <th style={{ padding: '12px 16px' }}>Nominal SPP</th>
+              <th style={{ padding: '12px 16px' }}>Tgl Bayar</th>
               <th style={{ padding: '12px 16px' }}>Status</th>
               <th style={{ padding: '12px 16px' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {students.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Belum ada murid aktif.</td></tr>
+              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Belum ada murid aktif.</td></tr>
             ) : (
               students.map((s, i) => {
-                const spp = sppData[s.id] || { amount: 0, status: "belum", paid_at: null, id: null };
+                const spp = sppData[s.id] || { amount: 0, status: "belum", paid_at: null, payment_date: "", id: null };
                 return (
                   <tr key={s.id} style={{ borderBottom: i < students.length - 1 ? '1px solid #1f2937' : 'none', color: '#d1d5db', fontSize: '14px' }}>
                     <td style={{ padding: '12px 16px', color: '#9ca3af' }}>{i + 1}</td>
@@ -977,6 +983,14 @@ function SppManager() {
                         onChange={(e) => { const val = parseInt(e.target.value) || 0; setSppData(prev => ({ ...prev, [s.id]: { ...prev[s.id], amount: val } })); }}
                         placeholder="0"
                         style={{ width: '120px', padding: '6px 10px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '6px', color: '#fff', fontSize: '13px', outline: 'none' }}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#059669'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = '#374151'}
+                      />
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <input type="date" value={spp.payment_date || ""}
+                        onChange={(e) => { setSppData(prev => ({ ...prev, [s.id]: { ...prev[s.id], payment_date: e.target.value } })); }}
+                        style={{ width: '140px', padding: '6px 10px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '6px', color: '#d1d5db', fontSize: '13px', outline: 'none' }}
                         onFocus={(e) => e.currentTarget.style.borderColor = '#059669'}
                         onBlur={(e) => e.currentTarget.style.borderColor = '#374151'}
                       />
