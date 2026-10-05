@@ -660,6 +660,7 @@ export default function TeacherDashboard() {
               return dayOrder.map(day => {
                 const items = grouped[day];
                 if (!items || items.length === 0) return null;
+                const sortedItems = [...items].sort((a, b) => a.time.localeCompare(b.time));
                 return (
                   <div key={day}
                     style={{
@@ -686,7 +687,7 @@ export default function TeacherDashboard() {
                         {items.length} murid
                       </span>
                     </div>
-                    {items.map((s, i) => (
+                    {sortedItems.map((s, i) => (
                       <div key={`${s.name}-${s.course}`}
                         style={{
                           display: 'flex',
