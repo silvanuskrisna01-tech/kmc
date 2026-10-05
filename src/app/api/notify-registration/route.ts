@@ -14,12 +14,12 @@ export async function POST(request: Request) {
 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎵 **Pendaftaran Kursus Baru**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-\`Nama\`      : ${name || "-"}
-\`Telepon\`   : ${phone || "-"}
-\`Instrumen\` : ${instrument || "-"}`;
+Nama            : ${name || "-"}
+Telepon         : ${phone || "-"}
+Instrumen       : ${instrument || "-"}`;
 
     if (notes) {
-      msg += `\n\`Catatan\`    : ${notes}`;
+      msg += `\nCatatan         : ${notes}`;
     }
 
     msg +=
