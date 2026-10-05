@@ -10,7 +10,7 @@ const MENU = [
 ];
 
 type AttendanceStat = { student: string; course: string; total: number; hadir: number; alpha: number; pct: string };
-type ScheduleItem = { id: number; day: string; time: string; student: string; course: string };
+type ScheduleItem = { id: number; day: string; time: string; student: string; course: string; isOverride?: boolean };
 type StudentItem = { name: string; course: string; day: string; time: string };
 
 export default function TeacherDashboard() {
@@ -164,14 +164,27 @@ export default function TeacherDashboard() {
   const todayName = dayMap[new Date().toLocaleDateString("en-US", { weekday: "long" })] || "Senin";
 
   const todaySchedule = mySchedule
-    .filter(s => s.day === todayName)
-    .sort((a, b) => a.time.localeCompare(b.time))
-    .filter((s, i, arr) => i === 0 || s.id !== arr[i-1].id || s.time !== arr[i-1].time);
+      .filter(s => s.day === todayName)
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .filter((s, i, arr) => i === 0 || s.id !== arr[i-1].id || s.time !== arr[i-1].time);
+
+    // Tambah jadwal override untuk hari ini
+    const todayDateStr = new Date().toISOString().slice(0, 10);
+    const overrideToday = Object.entries(scheduleOverrides)
+      .filter(([_, ov]) => (ov as any).temp_date === todayDateStr)
+      .map(([schedId, ov]) => {
+        const orig = mySchedule.find(s => String(s.id) === schedId);
+        return orig ? { ...orig, time: (ov as any).temp_time, isOverride: true } : null;
+      })
+      .filter(Boolean) as ScheduleItem[];
+  
+    const todayScheduleFinal = [...todaySchedule, ...overrideToday]
+      .sort((a, b) => a.time.localeCompare(b.time));
 
   const myStats = [
     { label: "Total Murid", value: myStudents.length },
     { label: "Kursus Aktif", value: myCourses.length },
-    { label: "Jadwal Hari Ini", value: todaySchedule.length },
+    { label: "Jadwal Hari Ini", value: todayScheduleFinal.filter(s => !scheduleOverrides[s.id] || scheduleOverrides[s.id].temp_date === new Date().toISOString().slice(0, 10) || s.isOverride).length },
     { label: "Total Sesi", value: myAttendance.reduce((sum, a) => sum + a.total, 0) },
   ];
 
@@ -460,13 +473,16 @@ export default function TeacherDashboard() {
               >
                 Jadwal Hari Ini
               </h2>
-              {todaySchedule.length === 0 ? (
+              {todayScheduleFinal.length === 0 ? (
                 <p style={{ color: '#6b7280', fontSize: '14px' }}>Tidak ada jadwal hari ini.</p>
               ) : (
-                todaySchedule.map((s, i) => {
+                todayScheduleFinal.map((s, i) => {
                   const status = sessionStatus[s.id] || "scheduled";
                   const isOngoing = status === "ongoing";
                   const isDone = status === "completed";
+                  const ov = scheduleOverrides[s.id];
+                  const isRescheduled = ov && ov.temp_date !== todayDateStr && !s.isOverride;
+                  const isOverrideItem = s.isOverride || false;
 
                   return (
                     <div
@@ -476,17 +492,17 @@ export default function TeacherDashboard() {
                         gap: isMobile ? '8px' : '16px',
                         flexWrap: isMobile ? 'wrap' : 'nowrap',
                         padding: '0 0 12px 0',
-                        marginBottom: i < todaySchedule.length - 1 ? '12px' : '0',
-                        borderBottom: i < todaySchedule.length - 1 ? '1px solid #1f2937' : 'none',
+                        marginBottom: i < todayScheduleFinal.length - 1 ? '12px' : '0',
+                        borderBottom: i < todayScheduleFinal.length - 1 ? '1px solid #1f2937' : 'none',
                         position: 'relative',
-                        opacity: isDone ? 0.5 : 1,
+                        opacity: isDone || isRescheduled ? 0.5 : 1,
                       }}
                     >
                       <div
                         style={{
                           fontSize: '14px',
                           fontWeight: 600,
-                          color: isDone ? '#6b7280' : '#059669',
+                          color: isDone || isRescheduled ? '#6b7280' : '#059669',
                           minWidth: '50px',
                           paddingTop: '2px',
                         }}
@@ -508,12 +524,12 @@ export default function TeacherDashboard() {
                             width: '10px',
                             height: '10px',
                             borderRadius: '50%',
-                            backgroundColor: isDone ? '#6b7280' : isOngoing ? '#fbbf24' : '#059669',
+                            backgroundColor: isDone || isRescheduled ? '#6b7280' : isOngoing ? '#fbbf24' : isOverrideItem ? '#f59e0b' : '#059669',
                             marginTop: '6px',
                             flexShrink: 0,
                           }}
                         />
-                        {i < todaySchedule.length - 1 && (
+                        {i < todayScheduleFinal.length - 1 && (
                           <div
                             style={{
                               width: '2px',
@@ -525,7 +541,7 @@ export default function TeacherDashboard() {
                         )}
                       </div>
 
-                      <div style={{ flex: 1, paddingBottom: i < todaySchedule.length - 1 ? '4px' : '0' }}>
+                      <div style={{ flex: 1, paddingBottom: i < todayScheduleFinal.length - 1 ? '4px' : '0' }}>
                         <div
                           style={{
                             fontSize: '12px',
@@ -551,11 +567,11 @@ export default function TeacherDashboard() {
                                                     color: isOngoing ? '#fbbf24' : '#6b7280',
                                                   }}
                                                 >
-                                                  {isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : s.course}
-                                                </div>
-                                                {/* Badge Jadwal Sementara */}
-                                                {scheduleOverrides[s.id] && !isDone && (
-                                                  <div style={{ marginTop: '4px' }}>
+                                                  {isRescheduled ? <>{s.course} — <span style={{ color: '#fbbf24', fontWeight: 600 }}>Ganti → {ov.temp_day} {ov.temp_time}</span></> : isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : isOverrideItem ? <><span style={{ color: '#f59e0b', fontWeight: 600 }}>🟡 Jadwal Sementara</span> — {s.course}</> : s.course}
+                                                                          </div>
+                                                                          {/* Badge info untuk rescheduled / override */}
+                                                                          {!isRescheduled && ov && !isOverrideItem && (
+                                                                            <div style={{ marginTop: '4px' }}>
                                                     <span style={{
                                                       display: 'inline-block', padding: '2px 8px', borderRadius: '6px',
                                                       fontSize: '11px', fontWeight: 600, backgroundColor: '#3f2f1f', color: '#fbbf24',
@@ -574,7 +590,7 @@ export default function TeacherDashboard() {
                           width: isMobile ? '100%' : 'auto',
                         }}
                       >
-                        {!isDone && (
+                        {!isDone && !isRescheduled && (
                                                   <button
                                                     onClick={() => {
                                                       if (isOngoing) {
@@ -613,7 +629,7 @@ export default function TeacherDashboard() {
                             {isOngoing ? "Selesai" : "Mulai"}
                           </button>
                         )}
-                        {isDone && (
+                        {isDone && !isRescheduled && (
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '11px', color: '#6b7280' }}>
                               ✓ {Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m
