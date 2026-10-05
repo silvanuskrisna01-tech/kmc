@@ -1127,7 +1127,7 @@ function SchedOverrideManager() {
               <select value={form.schedule_id} onChange={(e) => setForm({ ...form, schedule_id: e.target.value })}
                 style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none" }}>
                 <option value="">Pilih jadwal</option>
-                {schedules.filter(s => form.student_id === "" || s.students?.id === form.student_id).map(s =>
+                {schedules.filter(s => !form.student_id || s.student_id === form.student_id).map(s =>
                   <option key={s.id} value={s.id}>{s.day} {s.time} — {s.courses?.name || ""}</option>
                 )}
               </select>
