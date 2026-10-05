@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 type MyCourse = { course: string; teacher: string; day: string; time: string };
-type ScheduleItem = { id: number; schedId: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" };
+type ScheduleItem = { id: number; schedId: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" | "libur" };
 type SessionItem = { id: number; date: string; day: string; time: string; course: string; teacher: string; duration: string; rating: number; status?: string };
 
 const monthMap = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
@@ -183,9 +183,32 @@ export default function StudentDashboard() {
       const scheduleIds = (schedules as any[] || []).map((s: any) => s.id);
       if (scheduleIds.length > 0) {
         const { data: sessions } = await supabase
-          .from("sessions")
-          .select("id, status, date, schedules!inner(id, day, time, courses!inner(name, teachers!inner(name)))")
-          .in("schedule_id", scheduleIds);
+                  .from("sessions")
+                  .select("id, schedule_id, status, date, schedules!inner(id, day, time, courses!inner(name, teachers!inner(name)))")
+                  .in("schedule_id", scheduleIds);
+
+                // Build libur dates per schedule
+                                const liburDates: Record<string, Set<string>> = {};
+                                for (const s of (sessions as any[] || [])) {
+                                  if (s.status === "libur" && s.schedule_id) {
+                                    if (!liburDates[s.schedule_id]) liburDates[s.schedule_id] = new Set();
+                                    liburDates[s.schedule_id].add(s.date);
+                                  }
+                                }
+
+                                // Tandai item jadwal yang tanggalnya libur
+                                const curYearLibur = new Date().getFullYear();
+                                for (const item of schedList) {
+                                  const dates = liburDates[String(item.schedId)];
+                                  if (!dates) continue;
+                                  const [dStr, mStr] = item.date.split(' ');
+                                  const mi = monthMap.indexOf(mStr);
+                                  if (mi < 0) continue;
+                                  const iso = `${curYearLibur}-${String(mi + 1).padStart(2, '0')}-${String(parseInt(dStr)).padStart(2, '0')}`;
+                                  if (dates.has(iso)) {
+                                    item.status = "libur";
+                                  }
+                                }
 
         const todayKey = new Date().toISOString().slice(0, 10);
                 const hist: SessionItem[] = (sessions as any[] || [])
@@ -323,9 +346,9 @@ export default function StudentDashboard() {
     .sort((a, b) => parseDateId(a.date) - parseDateId(b.date));
 
   const nearestPerCourse = scheduleThisMonth.reduce((acc: Record<string, ScheduleItem>, s) => {
-    if (s.status !== "selesai" && !acc[s.course]) acc[s.course] = s;
-    return acc;
-  }, {});
+      if (s.status !== "selesai" && s.status !== "libur" && !acc[s.course]) acc[s.course] = s;
+      return acc;
+    }, {});
   const nearestSchedule = Object.values(nearestPerCourse);
 
   const totalSessions = sessionHistory.filter(s => s.status !== "libur").length;
@@ -1014,77 +1037,78 @@ export default function StudentDashboard() {
                     </div>
                     {items.map((s, i) => {
                       const isDone = s.status === "selesai";
-                      return (
-                        <div
-                          key={s.id}
-                          style={{
-                            display: 'flex',
-                            gap: '16px',
-                            padding: '0 0 16px 0',
-                            marginBottom: i < items.length - 1 ? '16px' : '0',
-                            borderBottom: i < items.length - 1 ? '1px solid #1f2937' : 'none',
-                            opacity: isDone ? 0.5 : 1,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: '12px',
-                                height: '12px',
-                                borderRadius: '50%',
-                                backgroundColor: isDone ? '#4b5563' : '#059669',
-                                marginTop: '4px',
-                              }}
-                            />
-                            {i < items.length - 1 && (
-                              <div
-                                style={{
-                                  width: '2px',
-                                  flex: 1,
-                                  backgroundColor: '#1f2937',
-                                  margin: '4px 0',
-                                }}
-                              />
-                            )}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                flexWrap: 'wrap',
-                                gap: '8px',
-                              }}
-                            >
-                              <div>
-                                <div style={{ fontSize: '15px', fontWeight: 600, color: isDone ? '#6b7280' : '#fff', textDecoration: isDone ? 'line-through' : 'none' }}>
-                                  {s.day}, {s.date}
-                                </div>
-                                <div style={{ fontSize: '13px', color: isDone ? '#4b5563' : '#9ca3af', marginTop: '2px' }}>
-                                  {s.time}
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: '12px',
-                                  color: isDone ? '#4b5563' : '#6b7280',
-                                  textDecoration: isDone ? 'line-through' : 'none',
-                                }}
-                              >
-                                {s.status === "selesai" ? "✓ Selesai" : "Akan datang"}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
+                                            const isLibur = s.status === "libur";
+                                            return (
+                                              <div
+                                                key={s.id}
+                                                style={{
+                                                  display: 'flex',
+                                                  gap: '16px',
+                                                  padding: '0 0 16px 0',
+                                                  marginBottom: i < items.length - 1 ? '16px' : '0',
+                                                  borderBottom: i < items.length - 1 ? '1px solid #1f2937' : 'none',
+                                                  opacity: isDone || isLibur ? 0.5 : 1,
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    flexShrink: 0,
+                                                  }}
+                                                >
+                                                  <div
+                                                    style={{
+                                                      width: '12px',
+                                                      height: '12px',
+                                                      borderRadius: '50%',
+                                                      backgroundColor: isDone ? '#4b5563' : isLibur ? '#6b7280' : '#059669',
+                                                      marginTop: '4px',
+                                                    }}
+                                                  />
+                                                  {i < items.length - 1 && (
+                                                    <div
+                                                      style={{
+                                                        width: '2px',
+                                                        flex: 1,
+                                                        backgroundColor: '#1f2937',
+                                                        margin: '4px 0',
+                                                      }}
+                                                    />
+                                                  )}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                  <div
+                                                    style={{
+                                                      display: 'flex',
+                                                      justifyContent: 'space-between',
+                                                      alignItems: 'center',
+                                                      flexWrap: 'wrap',
+                                                      gap: '8px',
+                                                    }}
+                                                  >
+                                                    <div>
+                                                      <div style={{ fontSize: '15px', fontWeight: 600, color: isDone || isLibur ? '#6b7280' : '#fff', textDecoration: isDone ? 'line-through' : 'none' }}>
+                                                        {s.day}, {s.date}
+                                                      </div>
+                                                      <div style={{ fontSize: '13px', color: isDone ? '#4b5563' : isLibur ? '#6b7280' : '#9ca3af', marginTop: '2px' }}>
+                                                        {isLibur ? "" : s.time}
+                                                      </div>
+                                                    </div>
+                                                    <div
+                                                      style={{
+                                                        fontSize: '12px',
+                                                        color: isDone ? '#4b5563' : isLibur ? '#6b7280' : '#6b7280',
+                                                        textDecoration: isDone ? 'line-through' : 'none',
+                                                      }}
+                                                    >
+                                                      {isDone ? "✓ Selesai" : isLibur ? "Libur" : "Akan datang"}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
                     })}
                   </div>
                 );
