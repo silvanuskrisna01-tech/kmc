@@ -42,6 +42,7 @@ export default function TeacherDashboard() {
   const [myAttendance, setMyAttendance] = useState<AttendanceStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
+    const [myScheduleIds, setMyScheduleIds] = useState<number[]>([]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -103,6 +104,7 @@ export default function TeacherDashboard() {
         course: s.courses?.name || "",
       }));
       setMySchedule(schedList);
+      setMyScheduleIds(schedList.map(s => s.id));
 
       // 3. Daftar murid unik per kursus
       const seen = new Set<string>();
@@ -180,6 +182,35 @@ export default function TeacherDashboard() {
 
     fetchData();
   }, []);
+
+  // ─── Real-time polling: cek perubahan status session tiap 5 detik ───
+  useEffect(() => {
+    if (!teacherId || myScheduleIds.length === 0) return;
+    const interval = setInterval(async () => {
+      const td = new Date().toISOString().slice(0, 10);
+      const { data: live } = await supabase
+        .from("sessions")
+        .select("id, schedule_id, status, created_at")
+        .eq("date", td)
+        .in("schedule_id", myScheduleIds);
+      
+      if (!live) return;
+      const newStatus: Record<string, string> = {};
+      const newStart: Record<string, number> = {};
+      const newIds: Record<string, string> = {};
+      for (const s of (live as any[])) {
+        newStatus[s.schedule_id] = s.status === "ongoing" ? "ongoing" : "completed";
+        if (s.status === "ongoing") {
+          newStart[s.schedule_id] = new Date(s.created_at).getTime();
+          newIds[s.schedule_id] = s.id;
+        }
+      }
+      setSessionStatus((prev) => ({ ...prev, ...newStatus }));
+      setSessionStart((prev) => ({ ...prev, ...newStart }));
+      setSessionOngoingId((prev) => ({ ...prev, ...newIds }));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [teacherId, myScheduleIds]);
 
   // Stats personal
   const dayMap: Record<string, string> = { "Sunday":"Minggu","Monday":"Senin","Tuesday":"Selasa","Wednesday":"Rabu","Thursday":"Kamis","Friday":"Jumat","Saturday":"Sabtu" };
