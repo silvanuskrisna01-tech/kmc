@@ -119,7 +119,7 @@ export default function TeacherDashboard() {
       // 4. Ambil sesi/absensi untuk semua jadwal guru ini
       const { data: sessions } = await supabase
         .from("sessions")
-        .select("status, date, schedules!inner(id, course_id, courses!inner(name), students!inner(name))")
+        .select("id, status, date, created_at, schedules!inner(id, course_id, courses!inner(name), students!inner(name))")
         .in("schedules.course_id", courseIds);
 
       // Hitung statistik per murid & tandai jadwal yg sdh ada sesinya
@@ -184,6 +184,7 @@ export default function TeacherDashboard() {
   // Stats personal
   const dayMap: Record<string, string> = { "Sunday":"Minggu","Monday":"Senin","Tuesday":"Selasa","Wednesday":"Rabu","Thursday":"Kamis","Friday":"Jumat","Saturday":"Sabtu" };
   const todayName = dayMap[new Date().toLocaleDateString("en-US", { weekday: "long" })] || "Senin";
+  const todayDateStr = new Date().toISOString().slice(0, 10);
 
   const todaySchedule = mySchedule
       .filter(s => s.day === todayName)
@@ -196,7 +197,6 @@ export default function TeacherDashboard() {
       .filter((s, i, arr) => i === 0 || s.id !== arr[i-1].id || s.time !== arr[i-1].time);
 
     // Tambah jadwal override untuk hari ini
-    const todayDateStr = new Date().toISOString().slice(0, 10);
     const overrideToday = Object.entries(scheduleOverrides)
       .filter(([_, ov]) => (ov as any).temp_date === todayDateStr)
       .map(([schedId, ov]) => {
