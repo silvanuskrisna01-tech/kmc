@@ -13,14 +13,25 @@ type AttendanceStat = { student: string; course: string; total: number; hadir: n
 type ScheduleItem = { id: number; day: string; time: string; student: string; course: string; isOverride?: boolean };
 type StudentItem = { name: string; course: string; day: string; time: string };
 
+function getMonday(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(s => parseInt(s));
+  const date = new Date(y, m - 1, d);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(date);
+  mon.setDate(date.getDate() + diff);
+  return `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
+}
+
 export default function TeacherDashboard() {
   const [active, setActive] = useState("Beranda");
   const [teacherName, setTeacherName] = useState("");
   const [teacherId, setTeacherId] = useState<string | null>(null);
   const [filterDay, setFilterDay] = useState<string | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<Record<number, string>>({});
-  const [sessionStart, setSessionStart] = useState<Record<number, number>>({});
-  const [timerDisplay, setTimerDisplay] = useState<Record<number, string>>({});
+  const [sessionStatus, setSessionStatus] = useState<Record<string, string>>({});
+  const [sessionStart, setSessionStart] = useState<Record<string, number>>({});
+  const [sessionOngoingId, setSessionOngoingId] = useState<Record<string, string>>({});
+  const [timerDisplay, setTimerDisplay] = useState<Record<string, string>>({});
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -113,7 +124,9 @@ export default function TeacherDashboard() {
 
       // Hitung statistik per murid & tandai jadwal yg sdh ada sesinya
             const statsMap: Record<string, { total: number; hadir: number; alpha: number; course: string }> = {};
-            const completedStatus: Record<number, string> = {};
+            const todayStatus: Record<string, string> = {};
+            const ongoingIds: Record<string, string> = {};
+            const ongoingStartTimes: Record<string, number> = {};
             const todayDate = new Date().toISOString().slice(0, 10);
             for (const ses of (sessions as any[] || [])) {
               const schedule = ses.schedules;
@@ -126,20 +139,29 @@ export default function TeacherDashboard() {
               statsMap[key].total += 1;
               if (ses.status === "hadir" || ses.status === "selesai") statsMap[key].hadir += 1;
               else if (ses.status === "alpha") statsMap[key].alpha += 1;
-              // Tandai jadwal yg sdh ada sesi hari ini sebagai completed
+              // Tandai jadwal hari ini
               if (ses.date === todayDate && schedule?.id) {
-                completedStatus[schedule.id] = "completed";
+                if (ses.status === "ongoing") {
+                  todayStatus[schedule.id] = "ongoing";
+                  ongoingStartTimes[schedule.id] = new Date(ses.created_at).getTime();
+                  ongoingIds[schedule.id] = ses.id;
+                } else {
+                  todayStatus[schedule.id] = "completed";
+                }
               }
             }
-            setSessionStatus(completedStatus);
+            setSessionStatus(todayStatus);
+            setSessionStart(ongoingStartTimes);
+            setSessionOngoingId(ongoingIds);
 
-      // 5. Ambil jadwal sementara (overrides) untuk hari ini
+      // 5. Ambil jadwal sementara (overrides) untuk minggu ini
       const todayDateStr = new Date().toISOString().slice(0, 10);
+      const weekStart = getMonday(todayDateStr);
       const { data: overrides } = await supabase
         .from("schedule_overrides")
         .select("schedule_id, temp_date, temp_day, temp_time, reason, status")
         .eq("status", "confirmed")
-        .gte("temp_date", todayDateStr);
+        .gte("temp_date", weekStart);
       const overrideMap: Record<string, any> = {};
       for (const ov of (overrides as any[] || [])) {
         overrideMap[ov.schedule_id] = ov;
@@ -165,6 +187,11 @@ export default function TeacherDashboard() {
 
   const todaySchedule = mySchedule
       .filter(s => s.day === todayName)
+      .filter(s => {
+        const ov = scheduleOverrides[s.id];
+        if (!ov) return true;
+        return getMonday(ov.temp_date) !== getMonday(todayDateStr);
+      })
       .sort((a, b) => a.time.localeCompare(b.time))
       .filter((s, i, arr) => i === 0 || s.id !== arr[i-1].id || s.time !== arr[i-1].time);
 
@@ -594,17 +621,36 @@ export default function TeacherDashboard() {
                                                   <button
                                                     onClick={() => {
                                                       if (isOngoing) {
+                                                        // Selesai — update session di DB
+                                                        const dur = Math.max(1, Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000));
                                                         setSessionStatus((prev) => ({ ...prev, [s.id]: "completed" }));
-                                                        // Simpan sesi ke database
+                                                        const ongoingId = sessionOngoingId[s.id];
+                                                        if (ongoingId) {
+                                                          supabase.from("sessions").update({
+                                                            status: "hadir",
+                                                            notes: `${dur}m`,
+                                                          }).eq("id", ongoingId).then();
+                                                        } else {
+                                                          supabase.from("sessions").insert({
+                                                            schedule_id: s.id,
+                                                            date: new Date().toISOString().slice(0, 10),
+                                                            status: "hadir",
+                                                            notes: `${dur}m`,
+                                                          }).then();
+                                                        }
+                                                      } else {
+                                                        // Mulai — simpan ke DB sebagai ongoing
+                                                        setSessionStatus((prev) => ({ ...prev, [s.id]: "ongoing" }));
+                                                        setSessionStart((prev) => ({ ...prev, [s.id]: Date.now() }));
                                                         supabase.from("sessions").insert({
                                                           schedule_id: s.id,
                                                           date: new Date().toISOString().slice(0, 10),
-                                                          status: "hadir",
-                                                          notes: `${Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m`,
-                                                        }).then();
-                                                      } else {
-                                                        setSessionStatus((prev) => ({ ...prev, [s.id]: "ongoing" }));
-                                                        setSessionStart((prev) => ({ ...prev, [s.id]: Date.now() }));
+                                                          status: "ongoing",
+                                                        }).select("id").then(({ data }) => {
+                                                          if (data && data[0]) {
+                                                            setSessionOngoingId(prev => ({ ...prev, [s.id]: data[0].id }));
+                                                          }
+                                                        });
                                                       }
                                                     }}
                             style={{
