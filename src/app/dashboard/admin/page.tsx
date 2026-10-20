@@ -1033,7 +1033,7 @@ function SchedOverrideManager() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [overrides, setOverrides] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ student_id: "", schedule_id: "", temp_date: "", temp_day: "Senin", temp_time: "09:00 WITA", reason: "" });
+  const [form, setForm] = useState({ student_id: "", schedule_id: "", temp_date: "", temp_day: "Senin", temp_time: "09:00 WITA", reason: "", type: "replace" });
   const [msg, setMsg] = useState("");
   const [showForm, setShowForm] = useState(false);
 
@@ -1074,13 +1074,14 @@ function SchedOverrideManager() {
       original_time: sched?.time || "",
       reason: form.reason,
       status: "pending",
+      type: form.type || "replace",
     };
 
     const { error } = await supabase.from("schedule_overrides").insert(payload);
     if (error) { setMsg("Gagal: " + error.message); return; }
     setMsg("✓ Jadwal sementara berhasil dibuat");
     setShowForm(false);
-    setForm({ student_id: "", schedule_id: "", temp_date: "", temp_day: "Senin", temp_time: "09:00 WITA", reason: "" });
+    setForm({ student_id: "", schedule_id: "", temp_date: "", temp_day: "Senin", temp_time: "09:00 WITA", reason: "", type: "replace" });
     fetchData();
   };
 
@@ -1168,6 +1169,39 @@ function SchedOverrideManager() {
             </div>
           </div>
           <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>Jenis Jadwal Sementara</label>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <label
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px",
+                  backgroundColor: form.type === "replace" ? "#064e3b" : "#1f2937",
+                  border: form.type === "replace" ? "1px solid #059669" : "1px solid #374151",
+                  borderRadius: "8px", cursor: "pointer", color: "#fff", fontSize: "13px",
+                }}
+              >
+                <input type="radio" name="override_type" checked={form.type === "replace"} onChange={() => setForm({ ...form, type: "replace" })} style={{ accentColor: "#059669" }} />
+                <div>
+                  <div style={{ fontWeight: 600 }}>Ganti Jadwal</div>
+                  <div style={{ fontSize: "11px", color: "#9ca3af" }}>Jadwal asli disembunyikan, diganti hari/jam baru</div>
+                </div>
+              </label>
+              <label
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px",
+                  backgroundColor: form.type === "add" ? "#3f2f1f" : "#1f2937",
+                  border: form.type === "add" ? "1px solid #f59e0b" : "1px solid #374151",
+                  borderRadius: "8px", cursor: "pointer", color: "#fff", fontSize: "13px",
+                }}
+              >
+                <input type="radio" name="override_type" checked={form.type === "add"} onChange={() => setForm({ ...form, type: "add" })} style={{ accentColor: "#f59e0b" }} />
+                <div>
+                  <div style={{ fontWeight: 600 }}>Tambah Sesi (Add-On)</div>
+                  <div style={{ fontSize: "11px", color: "#9ca3af" }}>Jadwal asli tetap jalan + sesi ekstra di hari lain</div>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div style={{ marginBottom: "16px" }}>
             <label style={{ display: "block", fontSize: "12px", color: "#9ca3af", marginBottom: "4px" }}>Alasan Ganti</label>
             <textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Misal: ada acara keluarga"
               style={{ width: "100%", padding: "10px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none", boxSizing: "border-box", minHeight: "60px" }} />
@@ -1193,7 +1227,8 @@ function SchedOverrideManager() {
                 <tr style={{ borderBottom: "1px solid #1f2937", color: "#9ca3af", fontSize: "13px", textAlign: "left" }}>
                   <th style={{ padding: "10px 12px" }}>Murid</th>
                   <th style={{ padding: "10px 12px" }}>Jadwal Asli</th>
-                  <th style={{ padding: "10px 12px" }}>Ganti ke</th>
+                  <th style={{ padding: "10px 12px" }}>Menjadi</th>
+                  <th style={{ padding: "10px 12px" }}>Jenis</th>
                   <th style={{ padding: "10px 12px" }}>Alasan</th>
                   <th style={{ padding: "10px 12px" }}>Status</th>
                   <th style={{ padding: "10px 12px" }}>Aksi</th>
@@ -1207,6 +1242,13 @@ function SchedOverrideManager() {
                       <td style={{ padding: "10px 12px", color: "#fff", fontWeight: 500 }}>{o.students?.name || ""}</td>
                       <td style={{ padding: "10px 12px" }}>{o.original_day} {o.original_time}</td>
                       <td style={{ padding: "10px 12px", color: "#059669", fontWeight: 500 }}>{o.temp_date} {o.temp_day} {o.temp_time}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        {o.type === "add" ? (
+                          <span style={{ padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, backgroundColor: "#3f2f1f", color: "#f59e0b" }}>➕ Tambah Sesi</span>
+                        ) : (
+                          <span style={{ padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, backgroundColor: "#064e3b", color: "#34d399" }}>Ganti</span>
+                        )}
+                      </td>
                       <td style={{ padding: "10px 12px" }}>{o.reason || "-"}</td>
                       <td style={{ padding: "10px 12px" }}>
                         <span style={{ padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 500, backgroundColor: ss.bg, color: ss.color }}>{ss.label}</span>

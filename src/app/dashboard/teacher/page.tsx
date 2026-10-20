@@ -10,7 +10,7 @@ const MENU = [
 ];
 
 type AttendanceStat = { student: string; course: string; total: number; hadir: number; alpha: number; pct: string };
-type ScheduleItem = { id: number; day: string; time: string; student: string; course: string; isOverride?: boolean };
+type ScheduleItem = { id: number; day: string; time: string; student: string; course: string; isOverride?: boolean; overrideType?: string };
 type StudentItem = { name: string; course: string; day: string; time: string };
 
 function getMonday(isoDate: string): string {
@@ -161,7 +161,7 @@ export default function TeacherDashboard() {
       const weekStart = getMonday(todayDateStr);
       const { data: overrides } = await supabase
         .from("schedule_overrides")
-        .select("schedule_id, temp_date, temp_day, temp_time, reason, status")
+        .select("schedule_id, temp_date, temp_day, temp_time, reason, status, type")
         .eq("status", "confirmed")
         .gte("temp_date", weekStart);
       const overrideMap: Record<string, any> = {};
@@ -222,6 +222,9 @@ export default function TeacherDashboard() {
       .filter(s => {
         const ov = scheduleOverrides[s.id];
         if (!ov) return true;
+        // Mode "Tambah Sesi": jadwal asli TETAP tampil
+        if (ov.type === "add") return true;
+        // Mode "Ganti": sembunyikan jadwal asli di minggu yang sama
         return getMonday(ov.temp_date) !== getMonday(todayDateStr);
       })
       .sort((a, b) => a.time.localeCompare(b.time))
@@ -232,7 +235,7 @@ export default function TeacherDashboard() {
       .filter(([_, ov]) => (ov as any).temp_date === todayDateStr)
       .map(([schedId, ov]) => {
         const orig = mySchedule.find(s => String(s.id) === schedId);
-        return orig ? { ...orig, time: (ov as any).temp_time, isOverride: true } : null;
+        return orig ? { ...orig, time: (ov as any).temp_time, isOverride: true, overrideType: (ov as any).type || "replace" } : null;
       })
       .filter(Boolean) as ScheduleItem[];
   
@@ -539,7 +542,7 @@ export default function TeacherDashboard() {
                   const isOngoing = status === "ongoing";
                   const isDone = status === "completed";
                   const ov = scheduleOverrides[s.id];
-                  const isRescheduled = ov && ov.temp_date !== todayDateStr && !s.isOverride;
+                  const isRescheduled = ov && ov.type !== "add" && ov.temp_date !== todayDateStr && !s.isOverride;
                   const isOverrideItem = s.isOverride || false;
 
                   return (
@@ -625,10 +628,10 @@ export default function TeacherDashboard() {
                                                     color: isOngoing ? '#fbbf24' : '#6b7280',
                                                   }}
                                                 >
-                                                  {isRescheduled ? <>{s.course} — <span style={{ color: '#fbbf24', fontWeight: 600 }}>Ganti → {ov.temp_day} {ov.temp_time}</span></> : isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : isOverrideItem ? <><span style={{ color: '#f59e0b', fontWeight: 600 }}>🟡 Jadwal Sementara</span> — {s.course}</> : s.course}
+                                                  {isRescheduled ? <>{s.course} — <span style={{ color: '#fbbf24', fontWeight: 600 }}>Ganti → {ov.temp_day} {ov.temp_time}</span></> : isDone ? `${s.course} — Selesai` : isOngoing ? <>{s.course} — Sedang berlangsung <span style={{ fontWeight: 600, color: '#34d399' }}>{timerDisplay[s.id] || "00:00"}</span></> : isOverrideItem ? <><span style={{ color: s.overrideType === "add" ? '#f59e0b' : '#fbbf24', fontWeight: 600 }}>{s.overrideType === "add" ? "➕ Sesi Tambahan" : "🟡 Jadwal Sementara"}</span> — {s.course}</> : s.course}
                                                                           </div>
                                                                           {/* Badge info untuk rescheduled / override */}
-                                                                          {!isRescheduled && ov && !isOverrideItem && (
+                                                                          {!isRescheduled && ov && !isOverrideItem && ov.type !== "add" && (
                                                                             <div style={{ marginTop: '4px' }}>
                                                     <span style={{
                                                       display: 'inline-block', padding: '2px 8px', borderRadius: '6px',

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 type MyCourse = { course: string; teacher: string; day: string; time: string };
-type ScheduleItem = { id: number; schedId: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" | "libur" };
+type ScheduleItem = { id: number; schedId: number; day: string; date: string; time: string; course: string; teacher: string; status: "akan datang" | "selesai" | "libur"; overrideType?: string };
 type SessionItem = { id: number; date: string; day: string; time: string; course: string; teacher: string; duration: string; rating: number; status?: string };
 
 const monthMap = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
@@ -241,10 +241,10 @@ export default function StudentDashboard() {
                         let ovrMap: Record<string, any> = {};
                         if (schedIds.length > 0) {
                           const { data: ovr } = await supabase
-                            .from("schedule_overrides")
-                            .select("schedule_id, temp_date, temp_day, temp_time, reason")
-                            .eq("status", "confirmed")
-                            .in("schedule_id", schedIds);
+                                                      .from("schedule_overrides")
+                                                      .select("schedule_id, temp_date, temp_day, temp_time, reason, type")
+                                                      .eq("status", "confirmed")
+                                                      .in("schedule_id", schedIds);
                           for (const o of (ovr as any[] || [])) {
                             ovrMap[o.schedule_id] = o;
                           }
@@ -271,57 +271,61 @@ export default function StudentDashboard() {
                                 const ovMon = getMonday(ov.temp_date);
 
                                 if (itemMon === ovMon) {
-                                  skip = true;
-                                  const ovKey = `${item.schedId}-${ovMon}`;
-                                  if (!addedOverrides.has(ovKey)) {
-                                    addedOverrides.add(ovKey);
-                                    const tp = ov.temp_date.split('-');
-                                    const ovDateStr = `${parseInt(tp[2])} ${monthMap[parseInt(tp[1]) - 1]}`;
-                                    const sc = lookup[String(item.schedId)];
-                                    if (sc) {
-                                      processedList.push({
-                                        id: item.schedId * 1000 + 500,
-                                        schedId: item.schedId,
-                                        day: ov.temp_day,
-                                        date: ovDateStr,
-                                        time: ov.temp_time,
-                                        course: sc.course,
-                                        teacher: sc.teacher,
-                                        status: getSessionStatus(ovDateStr, ov.temp_time),
-                                      });
-                                    }
-                                  }
-                                }
+                                                                  // Mode "Tambah Sesi": jadwal asli TETAP tampil
+                                                                  const isAdd = ov.type === "add";
+                                                                  if (!isAdd) skip = true;
+                                                                  const ovKey = `${item.schedId}-${ovMon}`;
+                                                                  if (!addedOverrides.has(ovKey)) {
+                                                                    addedOverrides.add(ovKey);
+                                                                    const tp = ov.temp_date.split('-');
+                                                                    const ovDateStr = `${parseInt(tp[2])} ${monthMap[parseInt(tp[1]) - 1]}`;
+                                                                    const sc = lookup[String(item.schedId)];
+                                                                    if (sc) {
+                                                                      processedList.push({
+                                                                        id: item.schedId * 1000 + 500,
+                                                                        schedId: item.schedId,
+                                                                        day: ov.temp_day,
+                                                                        date: ovDateStr,
+                                                                        time: ov.temp_time,
+                                                                        course: sc.course,
+                                                                        teacher: sc.teacher,
+                                                                        status: getSessionStatus(ovDateStr, ov.temp_time),
+                                                                        overrideType: isAdd ? "add" : "replace",
+                                                                      });
+                                                                    }
+                                                                  }
+                                                                }
                               }
                             }
                             if (!skip) processedList.push(item);
                           }
 
                           // Tambah override untuk bulan depan yang belum generate
-                          for (const [schedId, ov] of Object.entries(ovrMap)) {
-                            const ovMon = getMonday(ov.temp_date);
-                            const k = `${schedId}-${ovMon}`;
-                            if (!addedOverrides.has(k)) {
-                              const tp = ov.temp_date.split('-');
-                              const ovMonth = parseInt(tp[1]) - 1;
-                              if (ovMonth === new Date().getMonth() || ovMonth === (new Date().getMonth() + 1) % 12) {
-                                const ovDateStr = `${parseInt(tp[2])} ${monthMap[ovMonth]}`;
-                                const sc = lookup[schedId];
-                                if (sc) {
-                                  processedList.push({
-                                    id: parseInt(schedId) * 1000 + 500,
-                                    schedId: parseInt(schedId),
-                                    day: ov.temp_day,
-                                    date: ovDateStr,
-                                    time: ov.temp_time,
-                                    course: sc.course,
-                                    teacher: sc.teacher,
-                                    status: getSessionStatus(ovDateStr, ov.temp_time),
-                                  });
-                                }
-                              }
-                            }
-                          }
+                                                    for (const [schedId, ov] of Object.entries(ovrMap)) {
+                                                      const ovMon = getMonday(ov.temp_date);
+                                                      const k = `${schedId}-${ovMon}`;
+                                                      if (!addedOverrides.has(k)) {
+                                                        const tp = ov.temp_date.split('-');
+                                                        const ovMonth = parseInt(tp[1]) - 1;
+                                                        if (ovMonth === new Date().getMonth() || ovMonth === (new Date().getMonth() + 1) % 12) {
+                                                          const ovDateStr = `${parseInt(tp[2])} ${monthMap[ovMonth]}`;
+                                                          const sc = lookup[schedId];
+                                                          if (sc) {
+                                                            processedList.push({
+                                                              id: parseInt(schedId) * 1000 + 500,
+                                                              schedId: parseInt(schedId),
+                                                              day: ov.temp_day,
+                                                              date: ovDateStr,
+                                                              time: ov.temp_time,
+                                                              course: sc.course,
+                                                              teacher: sc.teacher,
+                                                              status: getSessionStatus(ovDateStr, ov.temp_time),
+                                                              overrideType: ov.type === "add" ? "add" : "replace",
+                                                            });
+                                                          }
+                                                        }
+                                                      }
+                                                    }
 
                           setScheduleItems(processedList);
                         } else {
@@ -727,10 +731,13 @@ export default function StudentDashboard() {
                       )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ color: '#d1d5db', fontSize: '14px', lineHeight: '1.6' }}>
-                        Hari <span style={{ color: '#fff', fontWeight: 600 }}>{s.day}</span> Tanggal <span style={{ color: '#fff', fontWeight: 600 }}>{s.date}</span> jam <span style={{ color: '#059669', fontWeight: 600 }}>{s.time}</span> — <span style={{ color: '#fff' }}>{s.course}</span> — <span style={{ color: '#9ca3af' }}>{s.teacher}</span>
-                      </div>
-                    </div>
+                                          <div style={{ color: '#d1d5db', fontSize: '14px', lineHeight: '1.6' }}>
+                                            Hari <span style={{ color: '#fff', fontWeight: 600 }}>{s.day}</span> Tanggal <span style={{ color: '#fff', fontWeight: 600 }}>{s.date}</span> jam <span style={{ color: '#059669', fontWeight: 600 }}>{s.time}</span> — <span style={{ color: '#fff' }}>{s.course}</span> — <span style={{ color: '#9ca3af' }}>{s.teacher}</span>
+                                            {s.overrideType === "add" && (
+                                              <span style={{ display: 'inline-block', marginLeft: '8px', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: '#3f2f1f', color: '#f59e0b' }}>➕ Sesi Tambahan</span>
+                                            )}
+                                          </div>
+                                        </div>
                   </div>
                 ))
               )}
@@ -968,18 +975,24 @@ export default function StudentDashboard() {
                                                   const courseName = sched.course;
                                                                             const teacherName = sched.teacher;
                           return (
-                            <div key={schedId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0', borderBottom: '1px solid #1f2937', color: '#d1d5db', fontSize: '14px' }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ color: '#fff', fontWeight: 500 }}>{courseName} — {teacherName}</div>
-                                <div style={{ fontSize: '13px', color: '#9ca3af', marginTop: '2px' }}>
-                                  <span style={{ textDecoration: 'line-through', color: '#6b7280' }}>{sched.day} {sched.time}</span>
-                                  <span style={{ color: '#fbbf24', fontWeight: 600 }}> → {ov.temp_day} {ov.temp_time}</span>
-                                  {ov.reason ? <span style={{ color: '#6b7280' }}> ({ov.reason})</span> : ''}
-                                </div>
-                              </div>
-                              <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: '#3f2f1f', color: '#fbbf24' }}>Sementara</span>
-                            </div>
-                          );
+                                                      <div key={schedId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0', borderBottom: '1px solid #1f2937', color: '#d1d5db', fontSize: '14px' }}>
+                                                        <div style={{ flex: 1 }}>
+                                                          <div style={{ color: '#fff', fontWeight: 500 }}>{courseName} — {teacherName}</div>
+                                                          <div style={{ fontSize: '13px', color: '#9ca3af', marginTop: '2px' }}>
+                                                            {ov.type === "add" ? (
+                                                              <span style={{ color: '#f59e0b', fontWeight: 600 }}>➕ Sesi Tambahan: {ov.temp_day} {ov.temp_time}</span>
+                                                            ) : (
+                                                              <>
+                                                                <span style={{ textDecoration: 'line-through', color: '#6b7280' }}>{sched.day} {sched.time}</span>
+                                                                <span style={{ color: '#fbbf24', fontWeight: 600 }}> → {ov.temp_day} {ov.temp_time}</span>
+                                                              </>
+                                                            )}
+                                                            {ov.reason ? <span style={{ color: '#6b7280' }}> ({ov.reason})</span> : ''}
+                                                          </div>
+                                                        </div>
+                                                        <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: ov.type === "add" ? '#3f2f1f' : '#1f2937', color: ov.type === "add" ? '#f59e0b' : '#fbbf24' }}>{ov.type === "add" ? "Tambah Sesi" : "Sementara"}</span>
+                                                      </div>
+                                                    );
                         });
                       })()}
                     </div>
@@ -1093,8 +1106,11 @@ export default function StudentDashboard() {
                                                         {s.day}, {s.date}
                                                       </div>
                                                       <div style={{ fontSize: '13px', color: isDone ? '#4b5563' : isLibur ? '#6b7280' : '#9ca3af', marginTop: '2px' }}>
-                                                        {isLibur ? "" : s.time}
-                                                      </div>
+                                                                                                              {isLibur ? "" : s.time}
+                                                                                                              {s.overrideType === "add" && !isLibur && (
+                                                                                                                <span style={{ display: 'inline-block', marginLeft: '8px', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: '#3f2f1f', color: '#f59e0b' }}>➕ Sesi Tambahan</span>
+                                                                                                              )}
+                                                                                                            </div>
                                                     </div>
                                                     <div
                                                       style={{
