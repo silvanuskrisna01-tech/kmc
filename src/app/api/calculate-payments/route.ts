@@ -59,51 +59,51 @@ export async function POST(request: Request) {
       let regularCount = 0;
       let addOnCount = 0;
 
-      // Ambil SPP untuk semua murid yang terlibat di bulan ini
-      const studentIds = [...new Set(sessionList.map((s: any) => s.schedules?.student_id))].filter(Boolean);
-      const sppMap: Record<string, number> = {};
-
-      if (studentIds.length > 0) {
-        const { data: sppData } = await supabase
-          .from("spp")
-          .select("student_id, amount")
-          .eq("month", month)
-          .in("student_id", studentIds);
-
-        for (const s of (sppData || [])) {
-          sppMap[s.student_id] = s.amount;
-        }
-      }
-
-      // 5. Cek override type='add' untuk sessions ini
-      const { data: overrides } = await supabase
-        .from("schedule_overrides")
-        .select("schedule_id, type, temp_date")
-        .eq("status", "confirmed")
-        .in("schedule_id", sessionList.map(s => s.schedule_id));
-      
-      const overrideAddSet = new Set(
-        (overrides || []).filter((o: any) => o.type === "add").map((o: any) => `${o.schedule_id}-${o.temp_date}`)
-      );
-
-      for (const ses of sessionList) {
-        const sched = ses.schedules as any;
-        const studentId = sched?.student_id;
-        const sppAmount = sppMap[studentId] || 0;
-        const perSessionValue = sppAmount > 0 ? Math.round((sppAmount / 4) * 0.6) : 0;
-        totalTeacherShare += perSessionValue;
-
-        const sesDate = ses.date;
-        const key = `${ses.schedule_id}-${sesDate}`;
-        if (overrideAddSet.has(key as string)) {
-          addOnCount++;
-        } else {
-          regularCount++;
-        }
-      }
-
       if (sessionList.length > 0) {
-        results.push({
+        // Ambil SPP untuk semua murid yang terlibat di bulan ini
+        const studentIds = [...new Set(sessionList.map((s: any) => s.schedules?.student_id))].filter(Boolean);
+        const sppMap: Record<string, number> = {};
+
+        if (studentIds.length > 0) {
+          const { data: sppData } = await supabase
+            .from("spp")
+            .select("student_id, amount")
+            .eq("month", month)
+            .in("student_id", studentIds);
+
+          for (const s of (sppData || [])) {
+            sppMap[s.student_id] = s.amount;
+          }
+        }
+
+        // 5. Cek override type='add' untuk sessions ini
+        const { data: overrides } = await supabase
+          .from("schedule_overrides")
+          .select("schedule_id, type, temp_date")
+          .eq("status", "confirmed")
+          .in("schedule_id", sessionList.map(s => s.schedule_id));
+        
+        const overrideAddSet = new Set(
+          (overrides || []).filter((o: any) => o.type === "add").map((o: any) => `${o.schedule_id}-${o.temp_date}`)
+        );
+
+        for (const ses of sessionList) {
+          const sched = ses.schedules as any;
+          const studentId = sched?.student_id;
+          const sppAmount = sppMap[studentId] || 0;
+          const perSessionValue = sppAmount > 0 ? Math.round((sppAmount / 4) * 0.6) : 0;
+          totalTeacherShare += perSessionValue;
+          const sesDate = ses.date;
+          const key = `${ses.schedule_id}-${sesDate}`;
+          if (overrideAddSet.has(key as string)) {
+            addOnCount++;
+          } else {
+            regularCount++;
+          }
+        }
+      }
+
+      results.push({
           teacher_id: teacher.id,
           teacher_name: teacher.name,
           regular_sessions: regularCount,
@@ -112,7 +112,6 @@ export async function POST(request: Request) {
           total_teacher_share: totalTeacherShare,
           status: "pending",
         });
-      }
     }
 
     // Simpan ke database
