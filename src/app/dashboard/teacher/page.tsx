@@ -7,6 +7,7 @@ const MENU = [
   "Beranda",
   "Murid",
   "Laporan",
+  "Pembayaran",
 ];
 
 type AttendanceStat = { student: string; course: string; total: number; hadir: number; alpha: number; pct: string };
@@ -34,6 +35,7 @@ export default function TeacherDashboard() {
   const [timerDisplay, setTimerDisplay] = useState<Record<string, string>>({});
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [myPayments, setMyPayments] = useState<any[]>([]);
 
   // Data dari Supabase
   const [myCourses, setMyCourses] = useState<string[]>([]);
@@ -211,6 +213,24 @@ export default function TeacherDashboard() {
     }, 5000);
     return () => clearInterval(interval);
   }, [teacherId, myScheduleIds]);
+
+  // ─── Load pembayaran guru ───
+  useEffect(() => {
+    if (!teacherId) return;
+    const months: string[] = [];
+    const d = new Date();
+    for (let i = 0; i < 6; i++) {
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      d.setMonth(d.getMonth() - 1);
+    }
+    supabase
+      .from("teacher_payments")
+      .select("month, regular_sessions, add_on_sessions, total_sessions, total_teacher_share, status, paid_at")
+      .eq("teacher_id", teacherId)
+      .in("month", months)
+      .order("month", { ascending: false })
+      .then(({ data }) => setMyPayments(data || []));
+  }, [teacherId]);
 
   // Stats personal
   const dayMap: Record<string, string> = { "Sunday":"Minggu","Monday":"Senin","Tuesday":"Selasa","Wednesday":"Rabu","Thursday":"Kamis","Friday":"Jumat","Saturday":"Sabtu" };
@@ -399,6 +419,11 @@ export default function TeacherDashboard() {
                   {item === "Laporan" && (
                     <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {item === "Pembayaran" && (
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9 2a6 6 0 114 0h5.071a5.071 5.071 0 012-5h-1.07M3 12h11a3 3 0 010 3l3-3a3 3 0 01-2 2v7a1 1 0 100 1z" clipRule="evenodd" />
                     </svg>
                   )}
                 </span>
@@ -847,6 +872,74 @@ export default function TeacherDashboard() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ─── PEMBAYARAN ─── */}
+        {active === "Pembayaran" && (
+          <div>
+            <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '12px', padding: '24px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#fff', margin: '0 0 16px 0' }}>
+                Riwayat Pembayaran
+              </h2>
+              {(() => {
+                const payMap: Record<string, any> = {};
+                for (const p of myPayments) payMap[p.month] = p;
+                const rows: string[] = [];
+                const d = new Date();
+                for (let i = 0; i < 6; i++) {
+                  rows.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+                  d.setMonth(d.getMonth() - 1);
+                }
+
+                return (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #1f2937', color: '#9ca3af', fontSize: '13px', textAlign: 'left' }}>
+                          <th style={{ padding: '10px 12px' }}>Bulan</th>
+                          <th style={{ padding: '10px 12px' }}>Sesi</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Diterima</th>
+                          <th style={{ padding: '10px 12px' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(m => {
+                          const p = payMap[m];
+                          return (
+                            <tr key={m} style={{ borderBottom: '1px solid #1f2937' }}>
+                              <td style={{ padding: '10px 12px', color: '#d1d5db', fontWeight: 500 }}>{m}</td>
+                              <td style={{ padding: '10px 12px', color: '#9ca3af' }}>
+                                {p ? `${p.total_sessions || 0}× (${p.regular_sessions || 0} biasa + ${p.add_on_sessions || 0} add-on)` : "Belum dihitung"}
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', color: p ? '#fff' : '#6b7280', fontWeight: 600 }}>
+                                {p ? `Rp ${Number(p.total_teacher_share || 0).toLocaleString("id-ID")}` : "-"}
+                              </td>
+                              <td style={{ padding: '10px 12px' }}>
+                                {p?.status === "paid" ? (
+                                  <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: '#065f46', color: '#34d399' }}>✓ Lunas</span>
+                                ) : p ? (
+                                  <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: '#3f2f1f', color: '#fbbf24' }}>🔴 Belum</span>
+                                ) : (
+                                  <span style={{ color: '#6b7280', fontSize: '13px' }}>-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+            <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#111827', borderRadius: '12px', border: '1px solid #1f2937' }}>
+              <p style={{ fontSize: '13px', color: '#6b7280', margin: 0, lineHeight: '1.6' }}>
+                💡 Pembayaran dihitung otomatis dari sesi yang sudah <strong style={{ color: '#34d399' }}>Hadir</strong> bulan itu.
+                <br />Rate guru: <strong style={{ color: '#fff' }}>60%</strong> dari SPP per sesi.
+                <br />Hubungi admin jika ada pertanyaan.
+              </p>
+            </div>
           </div>
         )}
       </main>

@@ -9,7 +9,7 @@ type Course = { id: string; name: string; teacher_id: string; teacher_name: stri
 const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const timeOptions = Array.from({ length: 13 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00 WITA`);
 
-const MENU = ["Beranda", "Guru", "Kursus", "Murid", "Jadwal", "Ganti", "SPP"];
+const MENU = ["Beranda", "Guru", "Kursus", "Murid", "Jadwal", "Ganti", "SPP", "Bayar"];
 
 export default function AdminDashboard() {
   const [active, setActive] = useState("Beranda");
@@ -170,6 +170,7 @@ export default function AdminDashboard() {
     Jadwal: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 8h12v8H4V8z" clipRule="evenodd" /></svg>,
     SPP: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 2a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>,
     Ganti: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M15 9H1v7a1 1 0 01-1 1h2a1 1 0 012 2l2 2a1 1 0 00-2 2v4a1 1 0 002.586 0l2-2a1 1 0 010 2h12a1 1 0 014.586 0v-8z" clipRule="evenodd" /></svg>,
+    Bayar: <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a6 6 0 114 0h5.071a5.071 5.071 0 012-5h-1.07M3 12h11a3 3 0 010 3l3-3a3 3 0 01-2 2v7a1 1 0 100 1z" clipRule="evenodd" /></svg>,
   };
 
   if (loading) {
@@ -501,6 +502,7 @@ export default function AdminDashboard() {
           <SppManager />
         )}
       {active === "Ganti" && (<SchedOverrideManager />)}
+        {active === "Bayar" && (<PaymentManager />)}
       </main>
     </div>
   );
@@ -1272,6 +1274,150 @@ function SchedOverrideManager() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Komponen Manajemen Pembayaran Guru ───
+function PaymentManager() {
+  const [payments, setPayments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [generated, setGenerated] = useState(false);
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [msg, setMsg] = useState("");
+
+  const loadPayments = async (m: string) => {
+    setLoading(true);
+    const { data: pays } = await supabase
+      .from("teacher_payments")
+      .select("*, teachers!inner(name)")
+      .eq("month", m)
+      .order("teacher_id");
+    setPayments(pays || []);
+    setGenerated(true);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadPayments(month); }, []);
+
+  const generate = async () => {
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/calculate-payments", {
+        method: "POST",
+        body: JSON.stringify({ month }),
+      });
+      const json = await res.json();
+      if (json.error) { setMsg("Gagal: " + json.error); return; }
+      setMsg("✓ Berhasil generate! " + (json.data?.length || 0) + " guru");
+      loadPayments(month);
+    } catch (e: any) { setMsg("Gagal: " + e.message); }
+    setLoading(false);
+  };
+
+  const markPaid = async (id: string) => {
+    await supabase.from("teacher_payments").update({ status: "paid", paid_at: new Date().toISOString() }).eq("id", id);
+    loadPayments(month);
+  };
+
+  const markPending = async (id: string) => {
+    await supabase.from("teacher_payments").update({ status: "pending", paid_at: null }).eq("id", id);
+    loadPayments(month);
+  };
+
+  const onMonthChange = (m: string) => { setMonth(m); loadPayments(m); };
+
+  const monthOptions = () => {
+    const opts: string[] = [];
+    const d = new Date();
+    for (let i = 0; i < 6; i++) {
+      opts.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      d.setMonth(d.getMonth() - 1);
+    }
+    return opts;
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
+        <p style={{ color: "#6b7280", fontSize: "14px", margin: 0 }}>Hitung & kelola pembayaran guru per bulan.</p>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <select value={month} onChange={(e) => onMonthChange(e.target.value)}
+            style={{ padding: "8px 12px", backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", color: "#fff", fontSize: "13px", outline: "none" }}>
+            {monthOptions().map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <button onClick={generate}
+            style={{ padding: "10px 20px", backgroundColor: "#059669", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#047857"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#059669"}
+          >{loading ? "Memproses..." : "Hitung Ulang"}</button>
+        </div>
+      </div>
+
+      {msg && <p style={{ color: msg.startsWith("✓") ? "#34d399" : "#ef4444", fontSize: "14px", marginBottom: "16px" }}>{msg}</p>}
+
+      {loading && <p style={{ color: "#9ca3af", fontSize: "14px" }}>Memuat data...</p>}
+      {!loading && !generated && <p style={{ color: "#6b7280", fontSize: "14px" }}>Pilih bulan & klik "Hitung Ulang" untuk mulai.</p>}
+      {!loading && generated && payments.length === 0 && <p style={{ color: "#6b7280", fontSize: "14px" }}>Belum ada data pembayaran untuk bulan ini.</p>}
+
+      {!loading && payments.length > 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1f2937", color: "#9ca3af", fontSize: "13px", textAlign: "left" }}>
+                <th style={{ padding: "10px 12px" }}>Guru</th>
+                <th style={{ padding: "10px 12px" }}>Sesi</th>
+                <th style={{ padding: "10px 12px" }}>Add-On</th>
+                <th style={{ padding: "10px 12px", textAlign: "right" }}>Diterima</th>
+                <th style={{ padding: "10px 12px" }}>Status</th>
+                <th style={{ padding: "10px 12px" }}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((p: any) => {
+                const paid = p.status === "paid";
+                return (
+                  <tr key={p.id} style={{ borderBottom: "1px solid #1f2937" }}>
+                    <td style={{ padding: "10px 12px", color: "#fff", fontWeight: 500 }}>{p.teachers?.name || "-"}</td>
+                    <td style={{ padding: "10px 12px", color: "#d1d5db" }}>{p.total_sessions || 0}× ({p.regular_sessions || 0} biasa + {p.add_on_sessions || 0} add-on)</td>
+                    <td style={{ padding: "10px 12px", color: "#f59e0b" }}>{p.add_on_sessions || 0}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", color: "#fff", fontWeight: 600 }}>Rp {Number(p.total_teacher_share || 0).toLocaleString("id-ID")}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {paid ? (
+                        <span style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, backgroundColor: "#065f46", color: "#34d399" }}>✓ Lunas</span>
+                      ) : (
+                        <span style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, backgroundColor: "#3f2f1f", color: "#fbbf24" }}>🔴 Belum</span>
+                      )}
+                      {paid && p.paid_at && <span style={{ display: "block", fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>{new Date(p.paid_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {!paid ? (
+                        <button onClick={() => markPaid(p.id)} style={{ background: "none", border: "none", color: "#34d399", cursor: "pointer", fontSize: "13px" }}>Bayar</button>
+                      ) : (
+                        <button onClick={() => markPending(p.id)} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "13px" }}>Batal</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ marginTop: "20px", padding: "16px", backgroundColor: "#111827", borderRadius: "12px", border: "1px solid #1f2937" }}>
+        <h4 style={{ fontSize: "14px", fontWeight: 600, color: "#9ca3af", margin: "0 0 8px 0" }}>💡 Cara Hitung</h4>
+        <p style={{ fontSize: "13px", color: "#6b7280", margin: 0, lineHeight: "1.6" }}>
+          Guru dapet <strong style={{ color: "#fff" }}>60%</strong> dari SPP murid per sesi.<br />
+          Contoh: SPP Rp 450.000/bulan → per sesi Rp 112.500 → guru dapet <strong style={{ color: "#34d399" }}>Rp 67.500</strong>/sesi.<br />
+          Add-on sesi juga dihitung dengan skema yang sama.<br />
+          <span style={{ color: "#fbbf24" }}>⚠️</span> Pastikan data SPP murid sudah diinput untuk bulan ini sebelum generate.
+        </p>
+      </div>
     </div>
   );
 }
