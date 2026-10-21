@@ -1365,6 +1365,29 @@ function PaymentManager() {
       {!loading && generated && payments.length === 0 && <p style={{ color: "#6b7280", fontSize: "14px" }}>Belum ada data pembayaran untuk bulan ini.</p>}
 
       {!loading && payments.length > 0 && (
+        <>
+        {/* Ringkasan Pendapatan KMC */}
+        {(() => {
+          const totalSPP = payments.reduce((sum: number, p: any) => sum + Number(p.total_teacher_share || 0) / 0.6, 0);
+          const totalTeacher = payments.reduce((sum: number, p: any) => sum + Number(p.total_teacher_share || 0), 0);
+          const totalKMC = Math.round(totalSPP - totalTeacher);
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "24px" }}>
+              <div style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "12px", padding: "20px", textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "6px" }}>💰 Total SPP Terkumpul</div>
+                <div style={{ fontSize: "22px", fontWeight: 700, color: "#fff" }}>Rp {totalSPP.toLocaleString("id-ID")}</div>
+              </div>
+              <div style={{ backgroundColor: "#111827", border: "1px solid #1f2937", borderRadius: "12px", padding: "20px", textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "6px" }}>👨‍🏫 Total ke Guru (60%)</div>
+                <div style={{ fontSize: "22px", fontWeight: 700, color: "#f59e0b" }}>Rp {totalTeacher.toLocaleString("id-ID")}</div>
+              </div>
+              <div style={{ backgroundColor: "#064e3b", border: "1px solid #059669", borderRadius: "12px", padding: "20px", textAlign: "center" }}>
+                <div style={{ fontSize: "12px", color: "#34d399", marginBottom: "6px" }}>🏢 Pendapatan KMC (40%)</div>
+                <div style={{ fontSize: "22px", fontWeight: 700, color: "#34d399" }}>Rp {totalKMC.toLocaleString("id-ID")}</div>
+              </div>
+            </div>
+          );
+        })()}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
             <thead>
@@ -1407,7 +1430,7 @@ function PaymentManager() {
             </tbody>
           </table>
         </div>
-      )}
+      </>)}
 
       <div style={{ marginTop: "20px", padding: "16px", backgroundColor: "#111827", borderRadius: "12px", border: "1px solid #1f2937" }}>
         <h4 style={{ fontSize: "14px", fontWeight: 600, color: "#9ca3af", margin: "0 0 8px 0" }}>💡 Cara Hitung</h4>
