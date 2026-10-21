@@ -72,26 +72,40 @@ export async function POST(request: Request) {
         addonCountBySched[o.schedule_id] = (addonCountBySched[o.schedule_id] || 0) + 1;
       }
 
-      // 6. Hitung per murid: 4 sesi reguler + add-on
+      // 6. Hitung per murid
+      // Pertama: hitung total jadwal per murid (sebulan) untuk tau per-session SPP
       let totalTeacherShare = 0;
       let regularCount = 0;
       let addOnCount = 0;
 
-      for (const sched of schedList) {
-        const sppAmount = sppMap[sched.student_id] || 0;
+      // Kelompokkan jadwal per murid
+      const schedByStudent: Record<string, typeof schedList> = {};
+      for (const s of schedList) {
+        if (!schedByStudent[s.student_id]) schedByStudent[s.student_id] = [];
+        schedByStudent[s.student_id].push(s);
+      }
+
+      for (const [studentId, studentScheds] of Object.entries(schedByStudent)) {
+        const sppAmount = sppMap[studentId] || 0;
         if (sppAmount <= 0) continue; // skip kalo SPP belum diinput
 
-        const perSessionValue = Math.round((sppAmount / 4) * 0.6);
-        const addons = addonCountBySched[sched.id] || 0;
+        // Total jadwal untuk murid ini (4 sesi per jadwal reguler)
+        const totalRegular = studentScheds.length * 4;
 
-        // 4 sesi reguler
-        totalTeacherShare += perSessionValue * 4;
-        regularCount += 4;
+        // Per-session SPP = SPP total dibagi total sesi reguler
+        const perSessionValue = Math.round((sppAmount / totalRegular) * 0.6);
 
-        // Add-on
-        if (addons > 0) {
-          totalTeacherShare += perSessionValue * addons;
-          addOnCount += addons;
+        // Guru MR DICKY ngajar semua jadwal ini
+        totalTeacherShare += perSessionValue * totalRegular;
+        regularCount += totalRegular;
+
+        // Add-on untuk jadwal murid ini
+        for (const sched of studentScheds) {
+          const addons = addonCountBySched[sched.id] || 0;
+          if (addons > 0) {
+            totalTeacherShare += perSessionValue * addons;
+            addOnCount += addons;
+          }
         }
       }
 
