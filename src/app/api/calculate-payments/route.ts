@@ -37,69 +37,61 @@ export async function POST(request: Request) {
       const courseIds = (courses || []).map((c: any) => c.id);
       if (courseIds.length === 0) continue;
 
-      // 3. Ambil semua sesi hadir bulan ini untuk kursus guru
-      const { data: sessions } = await supabase
-        .from("sessions")
-        .select(`
-          id, status, date, created_at, notes, schedule_id,
-          schedules!inner(
-            id, student_id, day, time,
-            courses!inner(id, name)
-          )
-        `)
-        .in("schedules.course_id", courseIds)
-        .eq("status", "hadir")
-        .gte("date", startDate)
-        .lte("date", endDate);
+      // 3. Ambil semua jadwal untuk kursus guru ini (dengan data murid)
+      const { data: schedules } = await supabase
+        .from("schedules")
+        .select("id, student_id, day, time, students!inner(id, name)")
+        .in("course_id", courseIds);
 
-      const sessionList = sessions || [];
+      const schedList = schedules || [];
+      if (schedList.length === 0) continue;
 
-      // 4. Hitung per-sesi dan ambil SPP masing-masing murid
+      // 4. Ambil SPP murid-murid ini untuk bulan ini
+      const studentIds = [...new Set(schedList.map((s: any) => s.student_id))].filter(Boolean);
+      const { data: sppData } = await supabase
+        .from("spp")
+        .select("student_id, amount")
+        .eq("month", month)
+        .in("student_id", studentIds);
+      const sppMap: Record<string, number> = {};
+      for (const s of (sppData || [])) sppMap[s.student_id] = s.amount;
+
+      // 5. Ambil override type='add' untuk jadwal ini di bulan ini
+      const schedIds = schedList.map((s: any) => s.id);
+      const { data: overrides } = await supabase
+        .from("schedule_overrides")
+        .select("schedule_id, temp_date, type")
+        .eq("status", "confirmed")
+        .eq("type", "add")
+        .in("schedule_id", schedIds)
+        .gte("temp_date", startDate)
+        .lte("temp_date", endDate);
+      
+      const addonCountBySched: Record<string, number> = {};
+      for (const o of (overrides || [])) {
+        addonCountBySched[o.schedule_id] = (addonCountBySched[o.schedule_id] || 0) + 1;
+      }
+
+      // 6. Hitung per murid: 4 sesi reguler + add-on
       let totalTeacherShare = 0;
       let regularCount = 0;
       let addOnCount = 0;
 
-      if (sessionList.length > 0) {
-        // Ambil SPP untuk semua murid yang terlibat di bulan ini
-        const studentIds = [...new Set(sessionList.map((s: any) => s.schedules?.student_id))].filter(Boolean);
-        const sppMap: Record<string, number> = {};
+      for (const sched of schedList) {
+        const sppAmount = sppMap[sched.student_id] || 0;
+        if (sppAmount <= 0) continue; // skip kalo SPP belum diinput
 
-        if (studentIds.length > 0) {
-          const { data: sppData } = await supabase
-            .from("spp")
-            .select("student_id, amount")
-            .eq("month", month)
-            .in("student_id", studentIds);
+        const perSessionValue = Math.round((sppAmount / 4) * 0.6);
+        const addons = addonCountBySched[sched.id] || 0;
 
-          for (const s of (sppData || [])) {
-            sppMap[s.student_id] = s.amount;
-          }
-        }
+        // 4 sesi reguler
+        totalTeacherShare += perSessionValue * 4;
+        regularCount += 4;
 
-        // 5. Cek override type='add' untuk sessions ini
-        const { data: overrides } = await supabase
-          .from("schedule_overrides")
-          .select("schedule_id, type, temp_date")
-          .eq("status", "confirmed")
-          .in("schedule_id", sessionList.map(s => s.schedule_id));
-        
-        const overrideAddSet = new Set(
-          (overrides || []).filter((o: any) => o.type === "add").map((o: any) => `${o.schedule_id}-${o.temp_date}`)
-        );
-
-        for (const ses of sessionList) {
-          const sched = ses.schedules as any;
-          const studentId = sched?.student_id;
-          const sppAmount = sppMap[studentId] || 0;
-          const perSessionValue = sppAmount > 0 ? Math.round((sppAmount / 4) * 0.6) : 0;
-          totalTeacherShare += perSessionValue;
-          const sesDate = ses.date;
-          const key = `${ses.schedule_id}-${sesDate}`;
-          if (overrideAddSet.has(key as string)) {
-            addOnCount++;
-          } else {
-            regularCount++;
-          }
+        // Add-on
+        if (addons > 0) {
+          totalTeacherShare += perSessionValue * addons;
+          addOnCount += addons;
         }
       }
 
