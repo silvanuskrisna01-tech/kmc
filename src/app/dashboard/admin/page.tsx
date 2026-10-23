@@ -7,7 +7,11 @@ type Guru = { id: string; name: string; phone: string; courses: { id: string; na
 type Course = { id: string; name: string; teacher_id: string; teacher_name: string; status: string };
 
 const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-const timeOptions = Array.from({ length: 13 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00 WITA`);
+const timeOptions = Array.from({ length: 25 }, (_, i) => {
+  const h = 9 + Math.floor(i / 2);
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${String(h).padStart(2, '0')}:${m} WITA`;
+});
 
 const MENU = ["Beranda", "Guru", "Kursus", "Murid", "Jadwal", "Ganti", "SPP", "Bayar"];
 
