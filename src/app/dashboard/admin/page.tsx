@@ -523,7 +523,7 @@ function StudentManager() {
   const [schedForm, setSchedForm] = useState({ course_id: "", day: "Senin", time: "09:00 WITA" });
   const [courses, setCourses] = useState<{ id: string; name: string; teacher_name: string }[]>([]);
   const [schedMsg, setSchedMsg] = useState("");
-  const [progress, setProgress] = useState<Record<string, { total: number; hadir: number }>>({});
+  const [progress, setProgress] = useState<Record<string, { total: number; hadir: number; missing: number }>>({});
 
   const statusBadge = (status: string) => {
     const colors: Record<string, { bg: string; text: string }> = {
@@ -543,22 +543,113 @@ function StudentManager() {
   };
 
   // Ambil progress absensi per murid untuk bulan berjalan
+  // Total = sesi TERJADWAL (maks 4 per jadwal + add-on), Hadir = yang tercatat hadir
   const fetchProgress = async () => {
-    const now = new Date();
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const { data: sessions } = await supabase
-      .from("sessions")
-      .select("schedule_id, status, schedules!inner(student_id)")
-      .gte("date", `${monthKey}-01`)
-      .lte("date", `${monthKey}-31`)
-      .in("status", ["hadir", "ongoing", "alpha"]);
-    const map: Record<string, { total: number; hadir: number }> = {};
-    for (const s of (sessions as any[] || [])) {
+    const todayWita = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
+    const monthKey = todayWita.slice(0, 7);
+    const [y, m] = monthKey.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    const getMonday = (iso: string) => {
+      const d = new Date(iso + "T00:00:00");
+      const day = (d.getDay() + 6) % 7; // 0=Senin
+      d.setDate(d.getDate() - day);
+      return d.toISOString().slice(0, 10);
+    };
+
+    const [studentsRes, schedRes, ovRes, sessRes] = await Promise.all([
+      supabase.from("students").select("id, created_at"),
+      supabase.from("schedules").select("id, student_id, day"),
+      supabase.from("schedule_overrides")
+        .select("schedule_id, temp_date, type")
+        .eq("status", "confirmed")
+        .gte("temp_date", `${monthKey}-01`)
+        .lte("temp_date", `${monthKey}-${String(lastDay).padStart(2, "0")}`),
+      supabase.from("sessions")
+        .select("schedule_id, date, status, schedules!inner(student_id)")
+        .gte("date", `${monthKey}-01`)
+        .lte("date", `${monthKey}-${String(lastDay).padStart(2, "0")}`),
+    ]);
+
+    // Tanggal murid terdaftar (WITA) — dipakai utk murid yang mulai pertengahan bulan
+    const createdMap: Record<string, string> = {};
+    for (const st of (studentsRes.data || [])) {
+      createdMap[st.id] = new Date(st.created_at).toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
+    }
+
+    const schedByStudent: Record<string, { id: string; day: string }[]> = {};
+    for (const sc of (schedRes.data || [])) {
+      if (!schedByStudent[sc.student_id]) schedByStudent[sc.student_id] = [];
+      schedByStudent[sc.student_id].push(sc);
+    }
+
+    const ovBySched: Record<string, { temp_date: string; type: string }[]> = {};
+    for (const ov of (ovRes.data || [])) {
+      if (!ovBySched[ov.schedule_id]) ovBySched[ov.schedule_id] = [];
+      ovBySched[ov.schedule_id].push(ov);
+    }
+
+    // Catatan sesi per murid
+    const sessByStudent: Record<string, { hadir: number; hadirDates: Set<string> }> = {};
+    for (const s of ((sessRes.data || []) as any[])) {
       const sid = s.schedules?.student_id;
       if (!sid) continue;
-      if (!map[sid]) map[sid] = { total: 0, hadir: 0 };
-      map[sid].total += 1;
-      if (s.status === "hadir" || s.status === "ongoing") map[sid].hadir += 1;
+      if (!sessByStudent[sid]) sessByStudent[sid] = { hadir: 0, hadirDates: new Set() };
+      if (s.status === "hadir" || s.status === "ongoing") {
+        sessByStudent[sid].hadir += 1;
+        sessByStudent[sid].hadirDates.add(s.date);
+      }
+    }
+
+    const map: Record<string, { total: number; hadir: number; missing: number }> = {};
+    for (const st of (studentsRes.data || [])) {
+      const scheds = schedByStudent[st.id] || [];
+      let total = 0;
+      const scheduledDates: string[] = [];
+      for (const sc of scheds) {
+        const dayIdx = dayNames.indexOf(sc.day);
+        const regular: string[] = [];
+        for (let d = 1; d <= lastDay; d++) {
+          const dt = `${monthKey}-${String(d).padStart(2, "0")}`;
+          if (new Date(y, m - 1, d).getDay() !== dayIdx) continue;
+          if (createdMap[st.id] && dt < createdMap[st.id]) continue; // sebelum murid terdaftar
+          regular.push(dt);
+        }
+        // Maksimal 4 sesi reguler per bulan
+        const capped = regular.slice(0, 4);
+
+        // Override "Ganti": sesi dalam minggu yang sama dipindah ke temp_date
+        const ovs = ovBySched[sc.id] || [];
+        const dates = [...capped];
+        for (const ov of ovs) {
+          if (ov.type === "add") continue; // add-on dihitung terpisah
+          const week = getMonday(ov.temp_date);
+          const idx = dates.findIndex((dt) => getMonday(dt) === week);
+          if (idx >= 0) {
+            dates.splice(idx, 1); // sesi asli minggu itu diganti
+            dates.push(ov.temp_date);
+          } else {
+            dates.push(ov.temp_date);
+          }
+        }
+        total += dates.length;
+        scheduledDates.push(...dates);
+
+        // Add-on: sesi ekstra di luar 4
+        for (const ov of ovs) {
+          if (ov.type === "add") {
+            total += 1;
+            scheduledDates.push(ov.temp_date);
+          }
+        }
+      }
+      // Sesi yang SUDAH lewat tapi belum ada catatan hadir/ongoing → guru lupa catat
+      let missing = 0;
+      const info = sessByStudent[st.id];
+      for (const dt of scheduledDates) {
+        if (dt < todayWita && !(info?.hadirDates.has(dt))) missing += 1;
+      }
+      map[st.id] = { total, hadir: info?.hadir || 0, missing };
     }
     setProgress(map);
   };
@@ -687,8 +778,11 @@ function StudentManager() {
                           {p.hadir}/{p.total}
                         </span>
                         <span style={{ fontSize: '11px', color: '#6b7280', marginLeft: '6px' }}>({pct}%)</span>
-                        {p.total > p.hadir && (
-                          <span style={{ display: 'block', fontSize: '11px', color: '#f87171', marginTop: '2px' }}>⚠️ {p.total - p.hadir} belum hadir</span>
+                        {p.missing > 0 && (
+                          <span style={{ display: 'block', fontSize: '11px', color: '#f87171', marginTop: '2px' }}>⚠️ {p.missing} sesi belum dicatat</span>
+                        )}
+                        {p.missing === 0 && !full && (
+                          <span style={{ display: 'block', fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>menunggu sesi berikutnya</span>
                         )}
                       </td>
                     );
