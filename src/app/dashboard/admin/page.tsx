@@ -551,7 +551,7 @@ function StudentManager() {
       .select("schedule_id, status, schedules!inner(student_id)")
       .gte("date", `${monthKey}-01`)
       .lte("date", `${monthKey}-31`)
-      .in("status", ["hadir", "ongoing", "alpha", "libur"]);
+      .in("status", ["hadir", "ongoing", "alpha"]);
     const map: Record<string, { total: number; hadir: number }> = {};
     for (const s of (sessions as any[] || [])) {
       const sid = s.schedules?.student_id;
