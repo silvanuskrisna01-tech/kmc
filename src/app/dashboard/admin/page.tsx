@@ -523,6 +523,7 @@ function StudentManager() {
   const [schedForm, setSchedForm] = useState({ course_id: "", day: "Senin", time: "09:00 WITA" });
   const [courses, setCourses] = useState<{ id: string; name: string; teacher_name: string }[]>([]);
   const [schedMsg, setSchedMsg] = useState("");
+  const [progress, setProgress] = useState<Record<string, { total: number; hadir: number }>>({});
 
   const statusBadge = (status: string) => {
     const colors: Record<string, { bg: string; text: string }> = {
@@ -541,12 +542,33 @@ function StudentManager() {
     setLoading(false);
   };
 
+  // Ambil progress absensi per murid untuk bulan berjalan
+  const fetchProgress = async () => {
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const { data: sessions } = await supabase
+      .from("sessions")
+      .select("schedule_id, status, schedules!inner(student_id)")
+      .gte("date", `${monthKey}-01`)
+      .lte("date", `${monthKey}-31`)
+      .in("status", ["hadir", "ongoing", "alpha", "libur"]);
+    const map: Record<string, { total: number; hadir: number }> = {};
+    for (const s of (sessions as any[] || [])) {
+      const sid = s.schedules?.student_id;
+      if (!sid) continue;
+      if (!map[sid]) map[sid] = { total: 0, hadir: 0 };
+      map[sid].total += 1;
+      if (s.status === "hadir" || s.status === "ongoing") map[sid].hadir += 1;
+    }
+    setProgress(map);
+  };
+
   const fetchCourses = async () => {
     const { data } = await supabase.from("courses").select("id, name, teachers(name)").order("name");
     setCourses((data || []).map((c: any) => ({ id: c.id, name: c.name, teacher_name: c.teachers?.name || "" })));
   };
 
-  useEffect(() => { fetchStudents(); fetchCourses(); }, []);
+  useEffect(() => { fetchStudents(); fetchCourses(); fetchProgress(); }, []);
 
   // Filter & search
   const filtered = students.filter(s => {
@@ -637,6 +659,7 @@ function StudentManager() {
               <th style={{ padding: '12px 16px' }}>No</th>
               <th style={{ padding: '12px 16px' }}>Nama</th>
               <th style={{ padding: '12px 16px' }}>Telepon</th>
+              <th style={{ padding: '12px 16px' }}>Progres</th>
               <th style={{ padding: '12px 16px' }}>Status</th>
               <th style={{ padding: '12px 16px' }}>Jadwal</th>
               <th style={{ padding: '12px 16px' }}>Aksi</th>
@@ -644,13 +667,32 @@ function StudentManager() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Tidak ada murid.</td></tr>
+              <tr><td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>Tidak ada murid.</td></tr>
             ) : (
               filtered.map((s, i) => (
                 <tr key={s.id} style={{ borderBottom: '1px solid #1f2937', color: '#d1d5db', fontSize: '14px' }}>
                   <td style={{ padding: '12px 16px', color: '#9ca3af' }}>{i + 1}</td>
                   <td style={{ padding: '12px 16px', fontWeight: 500, color: '#fff' }}>{s.name}</td>
                   <td style={{ padding: '12px 16px' }}>{s.phone}</td>
+                  {(() => {
+                    const p = progress[s.id];
+                    if (!p || p.total === 0) {
+                      return <td style={{ padding: '12px 16px', color: '#6b7280', fontSize: '13px' }}>Belum ada sesi</td>;
+                    }
+                    const pct = Math.round((p.hadir / p.total) * 100);
+                    const full = p.hadir >= p.total;
+                    return (
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: full ? '#34d399' : '#fbbf24' }}>
+                          {p.hadir}/{p.total}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#6b7280', marginLeft: '6px' }}>({pct}%)</span>
+                        {p.total > p.hadir && (
+                          <span style={{ display: 'block', fontSize: '11px', color: '#f87171', marginTop: '2px' }}>⚠️ {p.total - p.hadir} belum hadir</span>
+                        )}
+                      </td>
+                    );
+                  })()}
                   <td style={{ padding: '12px 16px' }}>{statusBadge(s.status || "aktif")}</td>
                   <td style={{ padding: '12px 16px' }}><SchedInfo studentId={s.id} /></td>
                   <td style={{ padding: '12px 16px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
