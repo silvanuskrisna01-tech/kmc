@@ -180,12 +180,28 @@ export default function StudentDashboard() {
             setSchedLookup(lookup);
 
             // 2. Ambil sesi history
-      const scheduleIds = (schedules as any[] || []).map((s: any) => s.id);
-      if (scheduleIds.length > 0) {
-        const { data: sessions } = await supabase
-                  .from("sessions")
-                  .select("id, schedule_id, status, date, schedules!inner(id, day, time, courses!inner(name, teachers!inner(name)))")
-                  .in("schedule_id", scheduleIds);
+                              const scheduleIds = (schedules as any[] || []).map((s: any) => s.id);
+                              const hadirByCourse: Record<string, number> = {};
+                              const kuotaFilter = (item: any) => {
+                                if (item.overrideType === "add") return true; // add-on selalu tampil
+                                if (item.status === "akan datang" && (hadirByCourse[item.course] || 0) >= 4) return false;
+                                return true;
+                              };
+                              if (scheduleIds.length > 0) {
+                                const { data: sessions } = await supabase
+                                          .from("sessions")
+                                          .select("id, schedule_id, status, date, schedules!inner(id, day, time, courses!inner(name, teachers!inner(name)))")
+                                          .in("schedule_id", scheduleIds);
+
+                                        // Hitung sesi HADIR bulan ini per kursus (aturan kuota 4x/bulan)
+                                        const curYm = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+                                        for (const s of (sessions as any[] || [])) {
+                                          const cn = s.schedules?.courses?.name || "";
+                                          if (!cn) continue;
+                                          if ((s.status === "hadir" || s.status === "selesai" || s.status === "ongoing") && s.date?.startsWith(curYm)) {
+                                            hadirByCourse[cn] = (hadirByCourse[cn] || 0) + 1;
+                                          }
+                                        }
 
                 // Build libur dates per schedule
                                 const liburDates: Record<string, Set<string>> = {};
@@ -252,10 +268,10 @@ export default function StudentDashboard() {
                         }
 
                         // 5. Apply overrides ke schedule items
-                        if (Object.keys(ovrMap).length > 0) {
-                          const processedList: ScheduleItem[] = [];
-                          const addedOverrides = new Set<string>();
-                          const curYear = new Date().getFullYear();
+                                                if (Object.keys(ovrMap).length > 0) {
+                                                                          const processedList: ScheduleItem[] = [];
+                                                                          const addedOverrides = new Set<string>();
+                                                  const curYear = new Date().getFullYear();
 
                           for (const item of schedList) {
                             const ov = ovrMap[String(item.schedId)];
@@ -327,10 +343,10 @@ export default function StudentDashboard() {
                                                       }
                                                     }
 
-                          setScheduleItems(processedList);
+                          setScheduleItems(processedList.filter(kuotaFilter));
                         } else {
-                          setScheduleItems(schedList);
-                        }
+                                                  setScheduleItems(schedList.filter(kuotaFilter));
+                                                }
 
             setLoading(false);
     };
