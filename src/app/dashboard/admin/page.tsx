@@ -524,6 +524,11 @@ function StudentManager() {
   const [courses, setCourses] = useState<{ id: string; name: string; teacher_name: string }[]>([]);
   const [schedMsg, setSchedMsg] = useState("");
   const [progress, setProgress] = useState<Record<string, { total: number; hadir: number; missing: number }>>({});
+  const [catatModal, setCatatModal] = useState<{ studentId: string; studentName: string } | null>(null);
+  const [catatForm, setCatatForm] = useState({ schedule_id: "", date: "", status: "hadir", notes: "" });
+  const [catatScheds, setCatatScheds] = useState<{ id: string; day: string; time: string; course: string }[]>([]);
+  const [riwayatModal, setRiwayatModal] = useState<{ studentId: string; studentName: string } | null>(null);
+  const [riwayatSessions, setRiwayatSessions] = useState<any[]>([]);
 
   const statusBadge = (status: string) => {
     const colors: Record<string, { bg: string; text: string }> = {
@@ -652,6 +657,75 @@ function StudentManager() {
       map[st.id] = { total, hadir: info?.hadir || 0, missing };
     }
     setProgress(map);
+  };
+
+  // Buka modal riwayat sesi per murid (bulan berjalan)
+  const openRiwayat = async (studentId: string, studentName: string) => {
+    setRiwayatModal({ studentId, studentName });
+    setRiwayatSessions([]);
+    const todayWita = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
+    const monthKey = todayWita.slice(0, 7);
+    const { data } = await supabase
+      .from("sessions")
+      .select("id, date, status, notes, schedule_id, schedules!inner(day, time, courses!inner(name))")
+      .eq("schedules.student_id", studentId)
+      .gte("date", `${monthKey}-01`)
+      .lte("date", `${monthKey}-31`)
+      .order("date");
+    setRiwayatSessions((data || []) as any[]);
+  };
+
+  // Buka modal catat hadir manual
+  const openCatatHadir = async (studentId: string, studentName: string) => {
+    setCatatModal({ studentId, studentName });
+    const todayWita = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
+    const { data } = await supabase
+      .from("schedules")
+      .select("id, day, time, courses!inner(name)")
+      .eq("student_id", studentId);
+    const scheds = (data || []).map((s: any) => ({
+      id: s.id, day: s.day, time: s.time, course: s.courses?.name || "",
+    }));
+    setCatatScheds(scheds);
+    setCatatForm({
+      schedule_id: scheds[0]?.id || "",
+      date: todayWita,
+      status: "hadir",
+      notes: "",
+    });
+  };
+
+  // Simpan catat hadir manual → insert atau update sesi
+  const saveCatatHadir = async () => {
+    if (!catatModal || !catatForm.schedule_id || !catatForm.date) {
+      setSchedMsg("⚠️ Pilih jadwal dan tanggal dulu");
+      return;
+    }
+    // Cek apakah sudah ada sesi di tanggal & jadwal itu
+    const { data: existing } = await supabase
+      .from("sessions")
+      .select("id")
+      .eq("schedule_id", catatForm.schedule_id)
+      .eq("date", catatForm.date);
+    const notes = catatForm.notes.trim();
+    if (existing && existing.length > 0) {
+      await supabase
+        .from("sessions")
+        .update({ status: catatForm.status, notes: notes || null })
+        .eq("id", existing[0].id);
+    } else {
+      await supabase
+        .from("sessions")
+        .insert({
+          schedule_id: catatForm.schedule_id,
+          date: catatForm.date,
+          status: catatForm.status,
+          notes: notes || null,
+        });
+    }
+    setCatatModal(null);
+    setSchedMsg(`✓ Kehadiran ${catatModal.studentName} ${catatForm.date} dicatat (${catatForm.status})`);
+    fetchProgress();
   };
 
   const fetchCourses = async () => {
@@ -790,6 +864,16 @@ function StudentManager() {
                   <td style={{ padding: '12px 16px' }}>{statusBadge(s.status || "aktif")}</td>
                   <td style={{ padding: '12px 16px' }}><SchedInfo studentId={s.id} /></td>
                   <td style={{ padding: '12px 16px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button onClick={() => openRiwayat(s.id, s.name)}
+                      style={{ background: '#312e81', border: 'none', color: '#a5b4fc', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#4338ca'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#312e81'}
+                    >🕒 Riwayat</button>
+                    <button onClick={() => openCatatHadir(s.id, s.name)}
+                      style={{ background: '#0f766e', border: 'none', color: '#5eead4', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#115e59'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#0f766e'}
+                    >📝 Catat Hadir</button>
                     <button onClick={() => setEditModal({ id: s.id, name: s.name, phone: s.phone, status: s.status || "aktif" })}
                       style={{ background: '#1e3a5f', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px' }}
                       onMouseEnter={(e) => e.currentTarget.style.background = '#1e4a7f'}
@@ -882,6 +966,106 @@ function StudentManager() {
                 style={{ flex: 1, padding: '12px', backgroundColor: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Batal</button>
               <button onClick={addSchedule}
                 style={{ flex: 1, padding: '12px', backgroundColor: '#059669', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Simpan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL RIWAYAT SESI ─── */}
+      {riwayatModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '16px', padding: '32px', width: '90%', maxWidth: '560px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#fff', margin: '0 0 4px 0' }}>Riwayat Sesi</h2>
+            <p style={{ color: '#9ca3af', fontSize: '14px', margin: '0 0 20px 0' }}>
+              Murid: <span style={{ color: '#fff', fontWeight: 600 }}>{riwayatModal.studentName}</span> — bulan ini
+            </p>
+            {riwayatSessions.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '14px' }}>Belum ada sesi tercatat bulan ini.</p>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #1f2937', color: '#9ca3af', fontSize: '12px', textAlign: 'left' }}>
+                    <th style={{ padding: '8px 10px' }}>Tanggal</th>
+                    <th style={{ padding: '8px 10px' }}>Jadwal</th>
+                    <th style={{ padding: '8px 10px' }}>Status</th>
+                    <th style={{ padding: '8px 10px' }}>Catatan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {riwayatSessions.map((r: any) => (
+                    <tr key={r.id} style={{ borderBottom: '1px solid #1f2937', color: '#d1d5db', fontSize: '13px' }}>
+                      <td style={{ padding: '8px 10px' }}>{r.date}</td>
+                      <td style={{ padding: '8px 10px', color: '#9ca3af' }}>
+                        {r.schedules?.courses?.name || ""} {r.schedules?.day || ""} {r.schedules?.time || ""}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{
+                          fontSize: '12px', fontWeight: 600, padding: '2px 8px', borderRadius: '5px',
+                          backgroundColor: r.status === 'hadir' ? '#065f46' : r.status === 'ongoing' ? '#1e3a5f' : r.status === 'libur' ? '#3f2f1f' : '#3f1f1f',
+                          color: r.status === 'hadir' ? '#34d399' : r.status === 'ongoing' ? '#60a5fa' : r.status === 'libur' ? '#fbbf24' : '#f87171',
+                        }}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px 10px', color: '#9ca3af' }}>{r.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div style={{ display: 'flex', marginTop: '20px' }}>
+              <button onClick={() => setRiwayatModal(null)}
+                style={{ flex: 1, padding: '12px', backgroundColor: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL CATAT HADIR MANUAL ─── */}
+      {catatModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '16px', padding: '32px', width: '90%', maxWidth: '420px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#fff', margin: '0 0 4px 0' }}>Catat Hadir Manual</h2>
+            <p style={{ color: '#9ca3af', fontSize: '14px', margin: '0 0 24px 0' }}>Murid: <span style={{ color: '#fff', fontWeight: 600 }}>{catatModal.studentName}</span></p>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#d1d5db', marginBottom: '6px' }}>Jadwal</label>
+              <select value={catatForm.schedule_id} onChange={(e) => setCatatForm({ ...catatForm, schedule_id: e.target.value })}
+                style={{ width: '100%', padding: '10px 14px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}>
+                {catatScheds.length === 0 && <option value="">Murid belum punya jadwal</option>}
+                {catatScheds.map(s => <option key={s.id} value={s.id}>{s.course} — {s.day} {s.time}</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#d1d5db', marginBottom: '6px' }}>Tanggal</label>
+              <input type="date" value={catatForm.date} onChange={(e) => setCatatForm({ ...catatForm, date: e.target.value })}
+                style={{ width: '100%', padding: '10px 14px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#d1d5db', marginBottom: '6px' }}>Status</label>
+              <select value={catatForm.status} onChange={(e) => setCatatForm({ ...catatForm, status: e.target.value })}
+                style={{ width: '100%', padding: '10px 14px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}>
+                <option value="hadir">✅ Hadir</option>
+                <option value="alpha">❌ Alpha (tidak hadir)</option>
+                <option value="libur">🏖️ Libur</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#d1d5db', marginBottom: '6px' }}>Catatan (opsional)</label>
+              <input type="text" value={catatForm.notes} placeholder="cth: sesi 60 menit" onChange={(e) => setCatatForm({ ...catatForm, notes: e.target.value })}
+                style={{ width: '100%', padding: '10px 14px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
+            {schedMsg && schedMsg.startsWith("✓ Kehadiran") && <p style={{ color: '#34d399', fontSize: '13px', margin: '0 0 12px 0' }}>{schedMsg}</p>}
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => setCatatModal(null)}
+                style={{ flex: 1, padding: '12px', backgroundColor: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Batal</button>
+              <button onClick={saveCatatHadir}
+                style={{ flex: 1, padding: '12px', backgroundColor: '#0f766e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Simpan</button>
             </div>
           </div>
         </div>

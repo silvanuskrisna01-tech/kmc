@@ -185,26 +185,88 @@ export default function TeacherDashboard() {
     fetchData();
   }, []);
 
-  // ─── Real-time polling: cek perubahan status session tiap 5 detik ───
+  // ─── Real-time polling: cek status session tiap 5 detik + AUTO START/STOP ───
   useEffect(() => {
     if (!teacherId || myScheduleIds.length === 0) return;
+    const parseWita = (t: string): number | null => {
+      const mt = t?.match(/^(\d{1,2}):(\d{2})/);
+      if (!mt) return null;
+      return parseInt(mt[1]) * 60 + parseInt(mt[2]);
+    };
     const interval = setInterval(async () => {
-      const td = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const td = now.toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
+      const witaTime = now.toLocaleTimeString("en-GB", { timeZone: "Asia/Makassar", hour12: false });
+      const nowMin = parseInt(witaTime.slice(0, 2)) * 60 + parseInt(witaTime.slice(3, 5));
+      const dayIdx = new Date(td + "T00:00:00").getDay();
+      const dayName = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][dayIdx];
+
       const { data: live } = await supabase
         .from("sessions")
         .select("id, schedule_id, status, created_at")
         .eq("date", td)
         .in("schedule_id", myScheduleIds);
-      
+
+      const liveList = (live as any[] || []);
+      const liveBySched: Record<string, any> = {};
+      for (const s of liveList) liveBySched[s.schedule_id] = s;
+
+      // ── AUTO START: jam jadwal tiba & belum ada sesi → buka otomatis ──
+      for (const sc of mySchedule) {
+        if (liveBySched[sc.id]) continue; // sudah ada sesi hari ini
+        const ov = scheduleOverrides[sc.id];
+        let startMin: number | null = null;
+        if (ov && ov.temp_date === td) {
+          startMin = parseWita(ov.temp_time); // override/add-on hari ini
+        } else if (ov && ov.type !== "add" && ov.temp_date && ov.temp_date !== td) {
+          // sesi asli minggu ini diganti ke hari lain → hari ini tidak ada sesi
+          startMin = null;
+        } else if (sc.day === dayName) {
+          startMin = parseWita(sc.time); // jadwal reguler hari ini
+        }
+        if (startMin === null) continue;
+        if (nowMin >= startMin && nowMin < startMin + 60) {
+          await supabase.from("sessions").insert({
+            schedule_id: sc.id,
+            date: td,
+            status: "ongoing",
+            notes: "auto-start",
+          });
+          liveBySched[sc.id] = { status: "ongoing", created_at: new Date().toISOString() };
+        }
+      }
+
+      // ── AUTO STOP: sesi yang sudah lewat slot 60 menit → hadir otomatis ──
+      for (const s of liveList) {
+        if (s.status !== "ongoing") continue;
+        const sc = mySchedule.find((x) => x.id === s.schedule_id);
+        const ov = sc ? scheduleOverrides[sc.id] : null;
+        let startMin: number | null = null;
+        if (sc) {
+          if (ov && ov.temp_date === td) startMin = parseWita(ov.temp_time);
+          else startMin = parseWita(sc.time);
+        }
+        const elapsed = (now.getTime() - new Date(s.created_at).getTime()) / 60000;
+        const slotEnd = startMin !== null ? startMin + 60 : 60;
+        if (nowMin >= slotEnd || elapsed >= 90) {
+          await supabase.from("sessions").update({
+            status: "hadir",
+            notes: "60m (otomatis)",
+          }).eq("id", s.id);
+          liveBySched[s.schedule_id] = { status: "hadir" };
+        }
+      }
+
       if (!live) return;
       const newStatus: Record<string, string> = {};
       const newStart: Record<string, number> = {};
       const newIds: Record<string, string> = {};
-      for (const s of (live as any[])) {
-        newStatus[s.schedule_id] = s.status === "ongoing" ? "ongoing" : "completed";
+      for (const s of Object.values(liveBySched)) {
+        const sid = s.schedule_id || s.id;
+        newStatus[sid] = s.status === "ongoing" ? "ongoing" : "completed";
         if (s.status === "ongoing") {
-          newStart[s.schedule_id] = new Date(s.created_at).getTime();
-          newIds[s.schedule_id] = s.id;
+          newStart[sid] = new Date(s.created_at).getTime();
+          newIds[sid] = s.id;
         }
       }
       setSessionStatus((prev) => ({ ...prev, ...newStatus }));
