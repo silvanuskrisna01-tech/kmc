@@ -43,6 +43,9 @@ export default function TeacherDashboard() {
   const [myStudents, setMyStudents] = useState<StudentItem[]>([]);
   const [myAttendance, setMyAttendance] = useState<AttendanceStat[]>([]);
     const [loading, setLoading] = useState(true);
+  // Jumlah sesi HADIR bulan berjalan per jadwal (aturan 4x/bulan) + status murid
+  const [monthCountBySched, setMonthCountBySched] = useState<Record<string, number>>({});
+  const [schedStudentStatus, setSchedStudentStatus] = useState<Record<string, string>>({});
     const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
     const [myScheduleIds, setMyScheduleIds] = useState<number[]>([]);
 
@@ -95,7 +98,7 @@ export default function TeacherDashboard() {
       // 2. Ambil jadwal (schedules) untuk kursus-kursus ini
       const { data: schedules } = await supabase
         .from("schedules")
-        .select("id, day, time, courses!inner(name), students!inner(name)")
+        .select("id, day, time, courses!inner(name), students!inner(name, status)")
         .in("course_id", courseIds);
 
       const schedList: ScheduleItem[] = (schedules || []).map((s: any) => ({
@@ -107,6 +110,10 @@ export default function TeacherDashboard() {
       }));
       setMySchedule(schedList);
       setMyScheduleIds(schedList.map(s => s.id));
+      // Status murid per jadwal (untuk sembunyikan murid cuti/berhenti)
+      const statusMap: Record<string, string> = {};
+      for (const s of (schedules || [])) statusMap[s.id] = (s.students as any)?.status || "aktif";
+      setSchedStudentStatus(statusMap);
 
       // 3. Daftar murid unik per kursus
       const seen = new Set<string>();
@@ -132,6 +139,8 @@ export default function TeacherDashboard() {
             const ongoingIds: Record<string, string> = {};
             const ongoingStartTimes: Record<string, number> = {};
             const todayDate = new Date().toISOString().slice(0, 10);
+            const monthKeyWita = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" }).slice(0, 7);
+            const monthCount: Record<string, number> = {};
             for (const ses of (sessions as any[] || [])) {
               const schedule = ses.schedules;
               const studentName = schedule?.students?.name || "";
@@ -143,6 +152,12 @@ export default function TeacherDashboard() {
               statsMap[key].total += 1;
               if (ses.status === "hadir" || ses.status === "selesai") statsMap[key].hadir += 1;
               else if (ses.status === "alpha") statsMap[key].alpha += 1;
+              // Hitung sesi HADIR bulan berjalan per jadwal (aturan 4x/bulan)
+              if (schedule?.id && ses.date?.startsWith(monthKeyWita)) {
+                if (ses.status === "hadir" || ses.status === "selesai" || ses.status === "ongoing") {
+                  monthCount[schedule.id] = (monthCount[schedule.id] || 0) + 1;
+                }
+              }
               // Tandai jadwal hari ini
               if (ses.date === todayDate && schedule?.id) {
                 if (ses.status === "ongoing") {
@@ -154,6 +169,7 @@ export default function TeacherDashboard() {
                 }
               }
             }
+            setMonthCountBySched(monthCount);
             setSessionStatus(todayStatus);
             setSessionStart(ongoingStartTimes);
             setSessionOngoingId(ongoingIds);
@@ -214,6 +230,9 @@ export default function TeacherDashboard() {
       // ── AUTO START: jam jadwal tiba & belum ada sesi → buka otomatis ──
       for (const sc of mySchedule) {
         if (liveBySched[sc.id]) continue; // sudah ada sesi hari ini
+        // Murid sudah 4x hadir bulan ini → jangan buka sesi lagi (kecuali add-on hari ini)
+        const ovSc = scheduleOverrides[sc.id];
+        if ((monthCountBySched[sc.id] || 0) >= 4 && !(ovSc && ovSc.type === "add" && ovSc.temp_date === td)) continue;
         const ov = scheduleOverrides[sc.id];
         let startMin: number | null = null;
         if (ov && ov.temp_date === td) {
@@ -257,6 +276,25 @@ export default function TeacherDashboard() {
         }
       }
 
+      // ── AUTO STOP GLOBAL: tutup sesi 'ongoing' nyangkut dari hari-hari lain ──
+      // (guru lupa Selesai kemarin/lusa → status hadir otomatis biar tidak menggantung)
+      try {
+        const { data: stuck } = await supabase
+          .from("sessions")
+          .select("id, schedule_id, created_at")
+          .eq("status", "ongoing")
+          .in("schedule_id", myScheduleIds);
+        for (const st of (stuck as any[] || [])) {
+          const ageMin = (now.getTime() - new Date(st.created_at).getTime()) / 60000;
+          if (ageMin >= 90) {
+            await supabase.from("sessions").update({
+              status: "hadir",
+              notes: "60m (otomatis, tutup manual admin)",
+            }).eq("id", st.id);
+          }
+        }
+      } catch { /* abaikan */ }
+
       if (!live) return;
       const newStatus: Record<string, string> = {};
       const newStart: Record<string, number> = {};
@@ -274,7 +312,7 @@ export default function TeacherDashboard() {
       setSessionOngoingId((prev) => ({ ...prev, ...newIds }));
     }, 5000);
     return () => clearInterval(interval);
-  }, [teacherId, myScheduleIds]);
+  }, [teacherId, myScheduleIds, monthCountBySched]);
 
   // ─── Load pembayaran guru ───
   useEffect(() => {
@@ -302,6 +340,11 @@ export default function TeacherDashboard() {
   const todaySchedule = mySchedule
       .filter(s => s.day === todayName)
       .filter(s => {
+        // Sembunyikan murid cuti/berhenti — tidak ada jadwal aktif
+        const stuStatus = schedStudentStatus[s.id];
+        if (stuStatus && stuStatus !== "aktif") return false;
+        // Aturan 4x/bulan: kalau sudah penuh, jadwal sisa bulan ini clear
+        if ((monthCountBySched[s.id] || 0) >= 4) return false;
         const ov = scheduleOverrides[s.id];
         if (!ov) return true;
         // Mode "Tambah Sesi": jadwal asli TETAP tampil
