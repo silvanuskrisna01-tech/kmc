@@ -164,6 +164,8 @@ export default function TeacherDashboard() {
                   todayStatus[schedule.id] = "ongoing";
                   ongoingStartTimes[schedule.id] = new Date(ses.created_at).getTime();
                   ongoingIds[schedule.id] = ses.id;
+                } else if (ses.status === "libur") {
+                  todayStatus[schedule.id] = "libur";
                 } else {
                   todayStatus[schedule.id] = "completed";
                 }
@@ -301,7 +303,7 @@ export default function TeacherDashboard() {
       const newIds: Record<string, string> = {};
       for (const s of Object.values(liveBySched)) {
         const sid = s.schedule_id || s.id;
-        newStatus[sid] = s.status === "ongoing" ? "ongoing" : "completed";
+        newStatus[sid] = s.status === "ongoing" ? "ongoing" : s.status === "libur" ? "libur" : "completed";
         if (s.status === "ongoing") {
           newStart[sid] = new Date(s.created_at).getTime();
           newIds[sid] = s.id;
@@ -670,6 +672,7 @@ export default function TeacherDashboard() {
                 todayScheduleFinal.map((s, i) => {
                   const status = sessionStatus[s.id] || "scheduled";
                   const isOngoing = status === "ongoing";
+                  const isLibur = status === "libur";
                   const isDone = status === "completed";
                   const ov = scheduleOverrides[s.id];
                   const isRescheduled = ov && ov.type !== "add" && ov.temp_date !== todayDateStr && !s.isOverride;
@@ -781,7 +784,7 @@ export default function TeacherDashboard() {
                           width: isMobile ? '100%' : 'auto',
                         }}
                       >
-                        {!isDone && !isRescheduled && (
+                        {!isDone && !isLibur && !isRescheduled && (
                                                   <button
                                                     onClick={() => {
                                                       if (isOngoing) {
@@ -839,10 +842,17 @@ export default function TeacherDashboard() {
                             {isOngoing ? "Selesai" : "Mulai"}
                           </button>
                         )}
-                        {isDone && !isRescheduled && (
+                        {isDone && !isRescheduled && !isLibur && (
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '11px', color: '#6b7280' }}>
                               ✓ {Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m
+                            </div>
+                          </div>
+                        )}
+                        {isLibur && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#fbbf24', backgroundColor: '#3f2f1f', padding: '6px 12px', borderRadius: '8px' }}>
+                              🏖️ Libur
                             </div>
                           </div>
                         )}

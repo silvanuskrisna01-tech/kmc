@@ -595,11 +595,12 @@ function StudentManager() {
     }
 
     // Catatan sesi per murid
-    const sessByStudent: Record<string, { hadir: number; hadirDates: Set<string> }> = {};
+    const sessByStudent: Record<string, { hadir: number; hadirDates: Set<string>; recordedDates: Set<string> }> = {};
     for (const s of ((sessRes.data || []) as any[])) {
       const sid = s.schedules?.student_id;
       if (!sid) continue;
-      if (!sessByStudent[sid]) sessByStudent[sid] = { hadir: 0, hadirDates: new Set() };
+      if (!sessByStudent[sid]) sessByStudent[sid] = { hadir: 0, hadirDates: new Set(), recordedDates: new Set() };
+      sessByStudent[sid].recordedDates.add(s.date); // semua status = sudah tercatat
       if (s.status === "hadir" || s.status === "ongoing") {
         sessByStudent[sid].hadir += 1;
         sessByStudent[sid].hadirDates.add(s.date);
@@ -648,11 +649,11 @@ function StudentManager() {
           }
         }
       }
-      // Sesi yang SUDAH lewat tapi belum ada catatan hadir/ongoing → guru lupa catat
+      // Sesi yang SUDAH lewat tapi belum ada catatan apa pun (hadir/alpha/libur) → guru lupa catat
       let missing = 0;
       const info = sessByStudent[st.id];
       for (const dt of scheduledDates) {
-        if (dt < todayWita && !(info?.hadirDates.has(dt))) missing += 1;
+        if (dt < todayWita && !(info?.recordedDates.has(dt))) missing += 1;
       }
       map[st.id] = { total, hadir: info?.hadir || 0, missing };
     }
