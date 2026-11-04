@@ -230,10 +230,12 @@ export default function TeacherDashboard() {
       for (const s of liveList) liveBySched[s.schedule_id] = s;
 
       // ── AUTO START: jam jadwal tiba & belum ada sesi → buka otomatis ──
-      for (const sc of mySchedule) {
-        if (liveBySched[sc.id]) continue; // sudah ada sesi hari ini
-        // Murid sudah 4x hadir bulan ini → jangan buka sesi lagi (kecuali add-on hari ini)
-        const ovSc = scheduleOverrides[sc.id];
+            for (const sc of mySchedule) {
+              if (liveBySched[sc.id]) continue; // sudah ada sesi hari ini
+              const ovSc = scheduleOverrides[sc.id];
+              // Add-on butuh konfirmasi manual — jangan auto-start
+              if (ovSc && ovSc.type === "add" && ovSc.temp_date === td) continue;
+              // Murid sudah 4x hadir bulan ini → jangan buka sesi lagi (kecuali add-on hari ini — sudah di-skip di atas)
         if ((monthCountBySched[sc.id] || 0) >= 4 && !(ovSc && ovSc.type === "add" && ovSc.temp_date === td)) continue;
         const ov = scheduleOverrides[sc.id];
         let startMin: number | null = null;
@@ -798,12 +800,27 @@ export default function TeacherDashboard() {
                                                             notes: `${dur}m`,
                                                           }).eq("id", ongoingId).then();
                                                         } else {
-                                                          supabase.from("sessions").insert({
-                                                            schedule_id: s.id,
-                                                            date: new Date().toISOString().slice(0, 10),
-                                                            status: "hadir",
-                                                            notes: `${dur}m`,
-                                                          }).then();
+                                                          // Cek dulu apakah ada session hari ini (cegah duplikat auto-stop)
+                                                          supabase.from("sessions")
+                                                            .select("id")
+                                                            .eq("schedule_id", s.id)
+                                                            .eq("date", new Date().toISOString().slice(0, 10))
+                                                            .limit(1)
+                                                            .then(({ data }) => {
+                                                              if (data && data.length > 0) {
+                                                                supabase.from("sessions").update({
+                                                                  status: "hadir",
+                                                                  notes: `${dur}m`,
+                                                                }).eq("id", data[0].id).then();
+                                                              } else {
+                                                                supabase.from("sessions").insert({
+                                                                  schedule_id: s.id,
+                                                                  date: new Date().toISOString().slice(0, 10),
+                                                                  status: "hadir",
+                                                                  notes: `${dur}m`,
+                                                                }).then();
+                                                              }
+                                                            });
                                                         }
                                                       } else {
                                                         // Mulai — simpan ke DB sebagai ongoing
