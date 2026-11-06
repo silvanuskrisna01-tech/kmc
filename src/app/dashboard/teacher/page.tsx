@@ -166,6 +166,8 @@ export default function TeacherDashboard() {
                   ongoingIds[schedule.id] = ses.id;
                 } else if (ses.status === "libur") {
                   todayStatus[schedule.id] = "libur";
+                } else if (ses.status === "izin") {
+                  todayStatus[schedule.id] = "izin";
                 } else {
                   todayStatus[schedule.id] = "completed";
                 }
@@ -229,37 +231,8 @@ export default function TeacherDashboard() {
       const liveBySched: Record<string, any> = {};
       for (const s of liveList) liveBySched[s.schedule_id] = s;
 
-      // ── AUTO START: jam jadwal tiba & belum ada sesi → buka otomatis ──
-            for (const sc of mySchedule) {
-              if (liveBySched[sc.id]) continue; // sudah ada sesi hari ini
-              const ovSc = scheduleOverrides[sc.id];
-              // Add-on butuh konfirmasi manual — jangan auto-start
-              if (ovSc && ovSc.type === "add" && ovSc.temp_date === td) continue;
-              // Murid sudah 4x hadir bulan ini → jangan buka sesi lagi (kecuali add-on hari ini — sudah di-skip di atas)
-        if ((monthCountBySched[sc.id] || 0) >= 4 && !(ovSc && ovSc.type === "add" && ovSc.temp_date === td)) continue;
-        const ov = scheduleOverrides[sc.id];
-        let startMin: number | null = null;
-        if (ov && ov.temp_date === td) {
-          startMin = parseWita(ov.temp_time); // override/add-on hari ini
-        } else if (ov && ov.type !== "add" && ov.temp_date && ov.temp_date !== td) {
-          // sesi asli minggu ini diganti ke hari lain → hari ini tidak ada sesi
-          startMin = null;
-        } else if (sc.day === dayName) {
-          startMin = parseWita(sc.time); // jadwal reguler hari ini
-        }
-        if (startMin === null) continue;
-        if (nowMin >= startMin && nowMin < startMin + 60) {
-          await supabase.from("sessions").insert({
-            schedule_id: sc.id,
-            date: td,
-            status: "ongoing",
-            notes: "auto-start",
-          });
-          liveBySched[sc.id] = { status: "ongoing", created_at: new Date().toISOString() };
-        }
-      }
-
-      // ── AUTO STOP: sesi yang sudah lewat slot 60 menit → hadir otomatis ──
+      // ── HANYA AUTO STOP: sesi yang sudah lewat slot 60 menit → hadir otomatis ──
+      // (auto-start dihapus karena risiko — guru manual Mulai; admin Catat Hadir)
       for (const s of liveList) {
         if (s.status !== "ongoing") continue;
         const sc = mySchedule.find((x) => x.id === s.schedule_id);
@@ -305,7 +278,7 @@ export default function TeacherDashboard() {
       const newIds: Record<string, string> = {};
       for (const s of Object.values(liveBySched)) {
         const sid = s.schedule_id || s.id;
-        newStatus[sid] = s.status === "ongoing" ? "ongoing" : s.status === "libur" ? "libur" : "completed";
+        newStatus[sid] = s.status === "ongoing" ? "ongoing" : s.status === "libur" ? "libur" : s.status === "izin" ? "izin" : "completed";
         if (s.status === "ongoing") {
           newStart[sid] = new Date(s.created_at).getTime();
           newIds[sid] = s.id;
@@ -675,6 +648,7 @@ export default function TeacherDashboard() {
                   const status = sessionStatus[s.id] || "scheduled";
                   const isOngoing = status === "ongoing";
                   const isLibur = status === "libur";
+                  const isIzin = status === "izin";
                   const isDone = status === "completed";
                   const ov = scheduleOverrides[s.id];
                   const isRescheduled = ov && ov.type !== "add" && ov.temp_date !== todayDateStr && !s.isOverride;
@@ -691,7 +665,7 @@ export default function TeacherDashboard() {
                         marginBottom: i < todayScheduleFinal.length - 1 ? '12px' : '0',
                         borderBottom: i < todayScheduleFinal.length - 1 ? '1px solid #1f2937' : 'none',
                         position: 'relative',
-                        opacity: isDone || isRescheduled ? 0.5 : 1,
+                        opacity: isDone || isLibur || isIzin || isRescheduled ? 0.5 : 1,
                       }}
                     >
                       <div
@@ -786,7 +760,7 @@ export default function TeacherDashboard() {
                           width: isMobile ? '100%' : 'auto',
                         }}
                       >
-                        {!isDone && !isLibur && !isRescheduled && (
+                        {!isDone && !isLibur && !isIzin && !isRescheduled && (
                                                   <button
                                                     onClick={() => {
                                                       if (isOngoing) {
@@ -859,7 +833,7 @@ export default function TeacherDashboard() {
                             {isOngoing ? "Selesai" : "Mulai"}
                           </button>
                         )}
-                        {isDone && !isRescheduled && !isLibur && (
+                        {isDone && !isRescheduled && !isLibur && !isIzin && (
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '11px', color: '#6b7280' }}>
                               ✓ {Math.ceil((Date.now() - (sessionStart[s.id] || Date.now())) / 60000)}m
@@ -870,6 +844,13 @@ export default function TeacherDashboard() {
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '12px', fontWeight: 600, color: '#fbbf24', backgroundColor: '#3f2f1f', padding: '6px 12px', borderRadius: '8px' }}>
                               🏖️ Libur
+                            </div>
+                          </div>
+                        )}
+                        {isIzin && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#60a5fa', backgroundColor: '#1e3a5f', padding: '6px 12px', borderRadius: '8px' }}>
+                              📋 Izin
                             </div>
                           </div>
                         )}

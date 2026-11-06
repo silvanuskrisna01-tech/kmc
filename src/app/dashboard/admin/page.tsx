@@ -1002,8 +1002,8 @@ function StudentManager() {
                       <td style={{ padding: '8px 10px' }}>
                         <span style={{
                           fontSize: '12px', fontWeight: 600, padding: '2px 8px', borderRadius: '5px',
-                          backgroundColor: r.status === 'hadir' ? '#065f46' : r.status === 'ongoing' ? '#1e3a5f' : r.status === 'libur' ? '#3f2f1f' : '#3f1f1f',
-                          color: r.status === 'hadir' ? '#34d399' : r.status === 'ongoing' ? '#60a5fa' : r.status === 'libur' ? '#fbbf24' : '#f87171',
+                          backgroundColor: r.status === 'hadir' ? '#065f46' : r.status === 'ongoing' ? '#1e3a5f' : r.status === 'izin' ? '#312e81' : r.status === 'libur' ? '#3f2f1f' : '#3f1f1f',
+                          color: r.status === 'hadir' ? '#34d399' : r.status === 'ongoing' ? '#60a5fa' : r.status === 'izin' ? '#a5b4fc' : r.status === 'libur' ? '#fbbf24' : '#f87171',
                         }}>
                           {r.status}
                         </span>
@@ -1050,6 +1050,7 @@ function StudentManager() {
                 style={{ width: '100%', padding: '10px 14px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}>
                 <option value="hadir">✅ Hadir</option>
                 <option value="alpha">❌ Alpha (tidak hadir)</option>
+                <option value="izin">📋 Izin (berhalangan)</option>
                 <option value="libur">🏖️ Libur</option>
               </select>
             </div>
