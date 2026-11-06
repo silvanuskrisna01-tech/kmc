@@ -678,6 +678,7 @@ function StudentManager() {
 
   // Buka modal catat hadir manual
   const openCatatHadir = async (studentId: string, studentName: string) => {
+    setSchedMsg(""); // clear pesan lama biar nggak nyangkut
     setCatatModal({ studentId, studentName });
     const todayWita = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
     const { data } = await supabase
@@ -1061,21 +1062,25 @@ function StudentManager() {
                 style={{ width: '100%', padding: '10px 14px', backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
-            {schedMsg && schedMsg.startsWith("✓ Kehadiran") && <p style={{ color: '#34d399', fontSize: '13px', margin: '0 0 12px 0' }}>{schedMsg}</p>}
-
             <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={() => setCatatModal(null)}
-                style={{ flex: 1, padding: '12px', backgroundColor: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Batal</button>
-              <button onClick={saveCatatHadir}
-                style={{ flex: 1, padding: '12px', backgroundColor: '#0f766e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Simpan</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                          <button onClick={() => setCatatModal(null)}
+                            style={{ flex: 1, padding: '12px', backgroundColor: '#1f2937', color: '#9ca3af', border: '1px solid #374151', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>Batal</button>
+                          <button onClick={saveCatatHadir}
+                            style={{ flex: 1, padding: '12px', backgroundColor: '#0f766e', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Simpan</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
+                  {/* Pesan sukses catat hadir — di luar modal biar kelihatan setelah modal nutup */}
+                  {schedMsg && schedMsg.startsWith("✓ Kehadiran") && (
+                    <div style={{ backgroundColor: '#065f46', border: '1px solid #34d399', borderRadius: '8px', padding: '12px 20px', marginTop: '16px', color: '#34d399', fontSize: '14px', fontWeight: 500 }}>
+                      {schedMsg}
+                    </div>
+                  )}
+                </div>
+              );
+            }
 // ─── Komponen Input Jadwal ───
 function ScheduleAdmin() {
   const [students, setStudents] = useState<{ id: string; name: string }[]>([]);
