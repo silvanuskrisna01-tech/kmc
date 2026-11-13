@@ -342,7 +342,14 @@ export default function TeacherDashboard() {
       .filter(Boolean) as ScheduleItem[];
   
     const todayScheduleFinal = [...todaySchedule, ...overrideToday]
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .filter((s, i, arr) => {
+        if (i === 0) return true;
+        const prev = arr[i-1];
+        // Kalau sama id + jam: tampilkan yg override (add-on), buang yg reguler
+        if (s.id === prev.id && s.time === prev.time) return s.isOverride;
+        return true;
+      });
 
   const myStats = [
     { label: "Total Murid", value: myStudents.length },
